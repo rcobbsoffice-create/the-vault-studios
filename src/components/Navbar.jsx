@@ -23,8 +23,8 @@ const Navbar = () => {
         >
             <div className="container mx-auto px-6 h-20 flex items-center justify-between">
                 {/* Logo */}
-                <Link to="/" className="text-2xl font-bold tracking-tighter uppercase font-display">
-                    The <span className="text-gold">Vault</span> Studios
+                <Link to="/" className="flex items-center gap-2">
+                    <img src="/assets/logo.png" alt="Print Lab Studios" className="h-16 w-auto object-contain" />
                 </Link>
 
                 {/* Desktop Menu */}

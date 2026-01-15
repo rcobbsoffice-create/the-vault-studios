@@ -1,6 +1,6 @@
-# The Vault Studios 🏛️
+# Print Lab Studios 🏛️
 
-**The Vault Studios** is a premium, industrial-luxury recording studio platform designed for high-end production, seamless booking, and professional asset management.
+**Print Lab Studios** is a premium, industrial-luxury recording studio platform designed for high-end production, seamless booking, and professional asset management.
 
 ## ✨ Features
 
@@ -45,4 +45,4 @@ This project is optimized for deployment on **Vercel**.
 
 ## 📜 License
 
-MIT License - Copyright (c) 2026 The Vault Studios
+MIT License - Copyright (c) 2026 Print Lab Studios

@@ -6,9 +6,9 @@ const Studios = () => {
     const studios = [
         {
             id: 'A',
-            name: 'Studio A: The Vault',
+            name: 'Studio A: The Main Room',
             description: 'Our flagship suite featuring an SSL AWS 948 console, expansive live room, and private lounge.',
-            price: 85,
+            price: 75,
             features: ['SSL AWS 948', 'Neumann U87', 'Private Lounge', '4k Video Integration'],
             image: '/assets/studio_a.png'
         },
@@ -16,17 +16,9 @@ const Studios = () => {
             id: 'B',
             name: 'Studio B: The Lab',
             description: 'Perfect for production and mixing. Tuned for bass-heavy genres with a dedicated sub array.',
-            price: 75,
+            price: 65,
             features: ['Avid S6', 'Genelec 8351', 'Vocal Booth', 'Production Suite'],
             image: '/assets/studio_b.png'
-        },
-        {
-            id: 'C',
-            name: 'Studio C: The Booth',
-            description: 'Streamlined for tracking vocals and quick sessions. Pro quality, efficient workflow.',
-            price: 65,
-            features: ['Universal Audio Apollo', 'Shure SM7B', 'Intimate Setting', 'Fast Workflow'],
-            image: '/assets/studio_c.png'
         }
     ];
 

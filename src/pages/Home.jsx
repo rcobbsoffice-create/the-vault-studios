@@ -23,7 +23,7 @@ const Home = () => {
                         Norfolk, Virginia
                     </h2>
                     <h1 className="text-6xl md:text-8xl font-display font-bold mb-6 leading-tight animate-fade-in-up delay-100">
-                        THE VAULT <br /> STUDIOS
+                        PRINT LAB <br /> STUDIOS
                     </h1>
                     <p className="text-gray-300 text-xl md:text-2xl mb-10 max-w-2xl mx-auto font-light animate-fade-in-up delay-200">
                         Premium sound. Industrial aesthetic. Unmatched vibe.
@@ -51,7 +51,7 @@ const Home = () => {
                         <div className="bg-gold/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 text-gold">
                             <Music size={32} />
                         </div>
-                        <h3 className="text-2xl font-display mb-4">3 Premium Rooms</h3>
+                        <h3 className="text-2xl font-display mb-4">2 Premium Rooms</h3>
                         <p className="text-gray-400">
                             Each studio is acoustically treated and equipped with industry-standard gear for tracking, mixing, and mastering.
                         </p>

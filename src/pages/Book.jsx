@@ -1,32 +1,67 @@
 import React, { useState } from 'react';
 import { useBooking } from '../core/BookingContext';
-import { Calendar, Clock, CreditCard, Check } from 'lucide-react';
+import { useAuth } from '../core/AuthContext';
+import { Calendar, Clock, CreditCard, Check, Wallet, Plus, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const Book = () => {
-    const { cart, addToCart } = useBooking();
-    const [selectedStudio, setSelectedStudio] = useState('Studio A (The Vault)');
+    const { addToCart } = useBooking();
+    const { user, addPaymentMethod } = useAuth();
+    const navigate = useNavigate();
+
+    const [selectedStudio, setSelectedStudio] = useState('Studio A (The Main Room)');
     const [selectedDate, setSelectedDate] = useState('');
     const [selectedTime, setSelectedTime] = useState('');
     const [duration, setDuration] = useState(2);
 
+    // Payment Modal State
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [selectedCardId, setSelectedCardId] = useState(user?.wallet?.[0]?.id || 'new');
+    const [newCardForm, setNewCardForm] = useState({ brand: 'visa', last4: '', expiry: '' });
+
     const studios = [
-        { id: 'A', name: 'Studio A (The Vault)', price: 85, tag: 'Premium' },
-        { id: 'B', name: 'Studio B (The Lab)', price: 75, tag: 'Pro' },
-        { id: 'C', name: 'Studio C (The Booth)', price: 65, tag: 'Standard' },
+        { id: 'A', name: 'Studio A (The Main Room)', price: 75, tag: 'Premium' },
+        { id: 'B', name: 'Studio B (The Lab)', price: 65, tag: 'Pro' },
     ];
 
-    const handleBook = () => {
+    const getPrice = () => {
+        const s = studios.find(s => s.name === selectedStudio);
+        return s ? s.price * duration : 0;
+    };
+
+    const handleInitiateBooking = () => {
         if (selectedDate && selectedTime) {
-            addToCart(selectedStudio, selectedDate, selectedTime, duration);
-            alert('✅ Booking confirmed! Payment system will process shortly.');
+            setIsPaymentModalOpen(true);
         } else {
             alert('⚠️ Please select both date and time');
         }
     };
 
-    const getPrice = () => {
-        const s = studios.find(s => s.name === selectedStudio);
-        return s ? s.price * duration : 0;
+    const handleConfirmPayment = (e) => {
+        e.preventDefault();
+
+        let paymentDetails = { method: 'Stripe', status: 'Paid' };
+
+        // If using new card, save it to wallet if logged in
+        if (selectedCardId === 'new') {
+            if (newCardForm.last4.length === 4 && newCardForm.expiry) {
+                if (user) {
+                    addPaymentMethod(newCardForm);
+                }
+                paymentDetails.card = newCardForm;
+            } else {
+                alert('Please enter valid card details');
+                return;
+            }
+        } else {
+            const card = user.wallet.find(c => c.id === selectedCardId);
+            paymentDetails.card = card;
+        }
+
+        addToCart(selectedStudio, selectedDate, selectedTime, duration);
+        setIsPaymentModalOpen(false);
+        alert('✅ Booking confirmed! Payment processed successfully.');
+        navigate('/dashboard');
     };
 
     return (
@@ -63,8 +98,8 @@ const Book = () => {
                                         key={studio.id}
                                         onClick={() => setSelectedStudio(studio.name)}
                                         className={`group relative p-6 rounded-xl transition-all duration-300 border-2 ${selectedStudio === studio.name
-                                                ? 'bg-gradient-to-br from-gold via-gold to-yellow-600 border-gold shadow-2xl shadow-gold/20 scale-[1.02]'
-                                                : 'bg-black/50 border-white/10 hover:border-gold/50 hover:bg-zinc-900/50'
+                                            ? 'bg-gradient-to-br from-gold via-gold to-yellow-600 border-gold shadow-2xl shadow-gold/20 scale-[1.02]'
+                                            : 'bg-black/50 border-white/10 hover:border-gold/50 hover:bg-zinc-900/50'
                                             }`}
                                     >
                                         <div className="flex justify-between items-center">
@@ -74,8 +109,8 @@ const Book = () => {
                                                         {studio.name}
                                                     </span>
                                                     <span className={`px-2 py-1 rounded text-xs font-bold ${selectedStudio === studio.name
-                                                            ? 'bg-black/20 text-black'
-                                                            : 'bg-gold/10 text-gold'
+                                                        ? 'bg-black/20 text-black'
+                                                        : 'bg-gold/10 text-gold'
                                                         }`}>
                                                         {studio.tag}
                                                     </span>
@@ -202,7 +237,7 @@ const Book = () => {
                             </div>
 
                             <button
-                                onClick={handleBook}
+                                onClick={handleInitiateBooking}
                                 disabled={!selectedDate || !selectedTime}
                                 className="w-full bg-gradient-to-r from-gold via-gold to-yellow-600 hover:from-yellow-600 hover:to-gold text-black font-bold py-4 px-6 rounded-xl transition-all duration-300 transform hover:scale-[1.02] hover:shadow-2xl hover:shadow-gold/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none uppercase tracking-wider text-sm"
                             >
@@ -217,6 +252,106 @@ const Book = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Payment Modal */}
+            {isPaymentModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/90 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="bg-zinc-900 border border-gold/30 w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300">
+                        <div className="p-8">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-2xl font-display font-bold text-white uppercase flex items-center gap-2">
+                                    <Wallet className="text-gold" /> Checkout
+                                </h3>
+                                <button onClick={() => setIsPaymentModalOpen(false)} className="text-zinc-500 hover:text-white transition-colors">
+                                    <X size={24} />
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleConfirmPayment} className="space-y-6">
+                                <div>
+                                    <label className="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">Select Payment Method</label>
+                                    <div className="space-y-3">
+                                        {(user?.wallet || []).map(card => (
+                                            <label key={card.id} className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all ${selectedCardId === card.id ? 'bg-gold/10 border-gold' : 'bg-black border-white/10 hover:border-white/30'}`}>
+                                                <input
+                                                    type="radio"
+                                                    name="paymentMethod"
+                                                    value={card.id}
+                                                    checked={selectedCardId === card.id}
+                                                    onChange={() => setSelectedCardId(card.id)}
+                                                    className="accent-gold w-5 h-5"
+                                                />
+                                                <div className="flex-1">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="font-bold text-white uppercase tracking-wider">{card.brand} ending in {card.last4}</span>
+                                                        <span className="text-xs text-zinc-500 font-mono">{card.expiry}</span>
+                                                    </div>
+                                                </div>
+                                                <CreditCard className="text-zinc-400" size={20} />
+                                            </label>
+                                        ))}
+
+                                        <label className={`flex items-center gap-4 p-4 rounded-xl border cursor-pointer transition-all ${selectedCardId === 'new' ? 'bg-gold/10 border-gold' : 'bg-black border-white/10 hover:border-white/30'}`}>
+                                            <input
+                                                type="radio"
+                                                name="paymentMethod"
+                                                value="new"
+                                                checked={selectedCardId === 'new'}
+                                                onChange={() => setSelectedCardId('new')}
+                                                className="accent-gold w-5 h-5"
+                                            />
+                                            <span className="font-bold text-white uppercase tracking-wider flex-1">Use New Card</span>
+                                            <Plus className="text-zinc-400" size={20} />
+                                        </label>
+                                    </div>
+                                </div>
+
+                                {selectedCardId === 'new' && (
+                                    <div className="bg-black/50 rounded-xl p-4 border border-white/10 space-y-3 animate-in slide-in-from-top-2 duration-300">
+                                        <input
+                                            required
+                                            type="text"
+                                            placeholder="Card Number (Last 4 digits for demo)"
+                                            maxLength={4}
+                                            value={newCardForm.last4}
+                                            onChange={e => setNewCardForm({ ...newCardForm, last4: e.target.value })}
+                                            className="w-full bg-zinc-900 border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:border-gold outline-none"
+                                        />
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <input
+                                                required
+                                                type="text"
+                                                placeholder="MM/YY"
+                                                maxLength={5}
+                                                value={newCardForm.expiry}
+                                                onChange={e => setNewCardForm({ ...newCardForm, expiry: e.target.value })}
+                                                className="w-full bg-zinc-900 border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:border-gold outline-none"
+                                            />
+                                            <input
+                                                required
+                                                type="text"
+                                                placeholder="CVC"
+                                                maxLength={3}
+                                                className="w-full bg-zinc-900 border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:border-gold outline-none"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="border-t border-white/10 pt-6">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <span className="text-zinc-400 font-bold uppercase tracking-widest text-xs">Total to Pay</span>
+                                        <span className="text-3xl font-bold text-gold">${getPrice()}</span>
+                                    </div>
+                                    <button type="submit" className="w-full bg-gold text-black font-black uppercase tracking-widest py-4 rounded-xl hover:bg-white transition-colors shadow-lg shadow-gold/10 active:scale-95">
+                                        Confirm Payment
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

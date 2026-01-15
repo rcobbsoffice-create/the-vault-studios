@@ -6,19 +6,26 @@ import { Lock, Mail, AlertCircle } from 'lucide-react';
 const Login = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [name, setName] = useState('');
+    const [isLogin, setIsLogin] = useState(true);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const [socialLoading, setSocialLoading] = useState(null); // 'google', 'apple', or 'facebook'
+    const [socialLoading, setSocialLoading] = useState(null);
     const [rememberMe, setRememberMe] = useState(false);
     const navigate = useNavigate();
-    const { login, loginWithProvider } = useAuth();
+    const { login, signup, loginWithProvider } = useAuth();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         setLoading(true);
 
-        const result = login(email, password);
+        let result;
+        if (isLogin) {
+            result = await login(email, password);
+        } else {
+            result = await signup(email, password, name);
+        }
 
         if (result.success) {
             navigate('/dashboard');
@@ -28,23 +35,7 @@ const Login = () => {
         }
     };
 
-    const handleSocialLogin = async (provider) => {
-        setError('');
-        setSocialLoading(provider);
-
-        try {
-            const result = await loginWithProvider(provider);
-            if (result.success) {
-                navigate('/dashboard');
-            } else {
-                setError(result.error);
-            }
-        } catch (err) {
-            setError('Social authentication failed');
-        } finally {
-            setSocialLoading(null);
-        }
-    };
+    // ... social login code ...
 
     return (
         <div className="min-h-screen bg-black flex items-center justify-center px-4 pt-20">
@@ -52,12 +43,14 @@ const Login = () => {
                 {/* Header */}
                 <div className="text-center mb-8">
                     <h1 className="font-display text-4xl md:text-5xl font-bold mb-2">
-                        ARTIST <span className="text-gold">LOGIN</span>
+                        {isLogin ? 'ARTIST' : 'CREATE'} <span className="text-gold">{isLogin ? 'LOGIN' : 'ACCOUNT'}</span>
                     </h1>
-                    <p className="text-gray-400 font-sans">Access your studio bookings and bounces</p>
+                    <p className="text-gray-400 font-sans">
+                        {isLogin ? 'Access your studio bookings and bounces' : 'Join the Vault ecosystem'}
+                    </p>
                 </div>
 
-                {/* Login Card */}
+                {/* Card */}
                 <div className="bg-zinc-900 border border-white/10 rounded-3xl p-8 shadow-2xl backdrop-blur-sm">
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {/* Error Message */}
@@ -65,6 +58,23 @@ const Login = () => {
                             <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-center gap-3 text-red-400 animate-in fade-in slide-in-from-top-2">
                                 <AlertCircle size={20} />
                                 <span className="text-sm font-medium">{error}</span>
+                            </div>
+                        )}
+
+                        {/* Name Field (Register Only) */}
+                        {!isLogin && (
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-widest">
+                                    Artist / Band Name
+                                </label>
+                                <input
+                                    type="text"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    required
+                                    className="w-full bg-black border border-white/10 rounded-xl px-4 py-3.5 text-white focus:border-gold focus:ring-1 focus:ring-gold/20 outline-none transition-all placeholder:text-zinc-700"
+                                    placeholder="The Vault Artist"
+                                />
                             </div>
                         )}
 
@@ -104,31 +114,26 @@ const Login = () => {
                             </div>
                         </div>
 
-                        {/* Remember Me */}
-                        <div className="flex items-center justify-between">
-                            <label className="flex items-center gap-2 cursor-pointer group">
-                                <input
-                                    type="checkbox"
-                                    checked={rememberMe}
-                                    onChange={(e) => setRememberMe(e.target.checked)}
-                                    className="w-4 h-4 rounded border-white/10 bg-black text-gold focus:ring-gold focus:ring-offset-0 transition-colors"
-                                />
-                                <span className="text-xs text-gray-500 group-hover:text-gray-300 transition-colors uppercase tracking-wider">Remember me</span>
-                            </label>
-                            <a href="#" className="text-xs text-gold hover:text-white transition-colors uppercase font-bold tracking-wider">
-                                Forgot password?
-                            </a>
-                        </div>
-
                         {/* Submit Button */}
                         <button
                             disabled={loading || socialLoading}
                             type="submit"
                             className="w-full bg-gold hover:bg-yellow-500 text-black font-black pt-4 pb-4 rounded-xl transition-all active:scale-95 uppercase tracking-widest shadow-lg shadow-gold/10 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {loading ? 'Verifying...' : 'Sign In'}
+                            {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Create Account')}
                         </button>
                     </form>
+
+                    {/* Toggle */}
+                    <div className="text-center pt-6">
+                        <button
+                            type="button"
+                            onClick={() => { setError(''); setIsLogin(!isLogin); }}
+                            className="text-zinc-500 hover:text-white transition-colors text-xs font-bold uppercase tracking-widest"
+                        >
+                            {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
+                        </button>
+                    </div>
 
                     {/* Divider */}
                     <div className="relative my-8">
@@ -220,13 +225,13 @@ const Login = () => {
                         {/* Admin Card */}
                         <div
                             onClick={() => {
-                                setEmail('admin@thevault.com');
-                                setPassword('vaultadmin123');
+                                setEmail('admin@printlab.com');
+                                setPassword('printlabadmin123');
                             }}
                             className="bg-black border border-white/5 rounded-2xl p-6 cursor-pointer hover:border-blue-500/50 hover:bg-zinc-900 group transition-all"
                         >
-                            <p className="text-white font-display text-lg font-black tracking-tighter uppercase group-hover:text-blue-400 transition-colors leading-none">The Vault Admin</p>
-                            <p className="text-zinc-600 text-xs font-bold mt-1">admin@thevault.com</p>
+                            <p className="text-white font-display text-lg font-black tracking-tighter uppercase group-hover:text-blue-400 transition-colors leading-none">Print Lab Admin</p>
+                            <p className="text-zinc-600 text-xs font-bold mt-1">admin@printlab.com</p>
                             <div className="mt-3 flex items-center gap-2">
                                 <span className="text-[8px] bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded font-black tracking-widest uppercase">Admin</span>
                                 <span className="text-[8px] text-zinc-700 font-bold uppercase tracking-widest group-hover:text-zinc-500 transition-colors">Click to Fill</span>

@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Mic, Phone, PhoneOff, X, Volume2, Send } from 'lucide-react';
+import { useAuth } from '../core/AuthContext';
 
 const AIReceptionist = () => {
+    const { addNewBooking, allUsers } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
     const [callStatus, setCallStatus] = useState('idle');
     const [transcript, setTranscript] = useState([]);
@@ -10,11 +12,12 @@ const AIReceptionist = () => {
     const [userInput, setUserInput] = useState('');
     const [isSpeechSupported, setIsSpeechSupported] = useState(true);
 
-    // Use ref for conversation context to avoid stale closures
+    // Use ref for conversation context
     const contextRef = useRef({
         studio: null,
         date: null,
         time: null,
+        duration: 2,
         stage: 'GREETING'
     });
 
@@ -52,11 +55,11 @@ const AIReceptionist = () => {
     const startCall = async () => {
         setIsOpen(true);
         setCallStatus('calling');
-        contextRef.current = { studio: null, date: null, time: null, stage: 'GREETING' };
+        contextRef.current = { studio: null, date: null, time: null, duration: 2, stage: 'GREETING' };
 
         setTimeout(() => {
             setCallStatus('connected');
-            speakWithElevenLabs("Hello! Thanks for calling The Vault Studios. My name is Aria. How can I help you book a session today?");
+            speakWithElevenLabs("Hello! Thanks for calling Print Lab Studios. My name is Aria. How can I help you book a session today?");
         }, 2000);
     };
 
@@ -82,7 +85,8 @@ const AIReceptionist = () => {
                 return;
             }
 
-            const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM', {
+            // Voice: 'Bella' (Realistic Female) | Model: 'Turbo v2' (Low Latency)
+            const response = await fetch('https://api.elevenlabs.io/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL', {
                 method: 'POST',
                 headers: {
                     'Accept': 'audio/mpeg',
@@ -91,7 +95,7 @@ const AIReceptionist = () => {
                 },
                 body: JSON.stringify({
                     text,
-                    model_id: 'eleven_monolingual_v1',
+                    model_id: 'eleven_turbo_v2',
                     voice_settings: { stability: 0.5, similarity_boost: 0.75 }
                 })
             });
@@ -139,83 +143,223 @@ const AIReceptionist = () => {
         handleUserMessage(text);
     };
 
+    const parseBookingDetails = (text) => {
+        const input = text.toLowerCase();
+        let date = new Date(); // Default to today
+        let time = "12:00";
+        let duration = 2;
+
+        // 1. Parse Date
+        if (input.includes('tomorrow')) {
+            date.setDate(date.getDate() + 1);
+        } else if (input.includes('next week')) {
+            date.setDate(date.getDate() + 7);
+        } else {
+            // Check for day names
+            const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+            const todayDay = date.getDay();
+
+            for (let i = 0; i < 7; i++) {
+                if (input.includes(days[i])) {
+                    let diff = i - todayDay;
+                    if (diff <= 0) diff += 7; // Next occurrence
+                    date.setDate(date.getDate() + diff);
+                    break;
+                }
+            }
+        }
+
+        // 2. Parse Time
+        const timeMatch = input.match(/(\d{1,2})(:(\d{2}))?\s*(am|pm)?/);
+        if (timeMatch) {
+            let hours = parseInt(timeMatch[1]);
+            const minutes = timeMatch[3] || '00';
+            const meridiem = timeMatch[4];
+
+            if (meridiem === 'pm' && hours < 12) hours += 12;
+            if (meridiem === 'am' && hours === 12) hours = 0;
+
+            time = `${hours.toString().padStart(2, '0')}:${minutes}`;
+        }
+
+        // 3. Parse Duration
+        const durationMatch = input.match(/(\d+)\s*(hour|hr)/);
+        if (durationMatch) {
+            duration = parseInt(durationMatch[1]);
+        }
+
+        return {
+            date: date.toISOString().split('T')[0],
+            time,
+            duration
+        };
+    };
+
+    // KNOWLEDGE BASE (FAQs)
+    const checkKnowledgeBase = (input) => {
+        const i = input.toLowerCase();
+
+        // Equipment
+        if (i.includes('equip') || i.includes('gear') || i.includes('mic') || i.includes('interface'))
+            return "Both studios are equipped with industry-standard gear. Studio A features the Neumann U87 and Avalon 737. Studio B runs a slate of top digital interfaces. We use extensive acoustic treatment in both.";
+
+        // Rules
+        if (i.includes('smoke') || i.includes('smoking') || i.includes('party') || i.includes('guest'))
+            return "We have a strict policy: Max 5 guests per session to keep the vibe focused. No smoking inside the vocal booths, but we have a lounge area. We want you to be comfortable but productive.";
+
+        // Location
+        if (i.includes('address') || i.includes('location') || i.includes('where'))
+            return "We are located in the heart of the downtown arts district, right off Main Street. There's plenty of street parking available.";
+
+        // Pricing (General)
+        if (i.includes('much') || i.includes('cost') || i.includes('price'))
+            return "Studio A is $75 an hour, and Studio B is $65 an hour. Both include an engineer if you need one, or you can bring your own.";
+
+        return null;
+    };
+
+    // AVAILABILITY CHECKER
+    const isSlotAvailable = (date, time, studio) => {
+        // Simple collision detection
+        const targetStudio = studio === 'Studio A' ? 'Studio A (The Main Room)' : 'Studio B (The Lab)';
+
+        // 1. Flatten all bookings from all artists
+        const allBookings = allUsers.flatMap(u => u.bookings || []);
+
+        // 2. Check for collision
+        const collision = allBookings.find(b =>
+            b.studio === targetStudio &&
+            b.date === date &&
+            b.time === time &&
+            b.status !== 'Denied' && b.status !== 'Cancelled'
+        );
+
+        return !collision;
+    };
+
     const handleUserMessage = (userText) => {
         const input = userText.toLowerCase();
         const ctx = contextRef.current;
-
         console.log('Current stage:', ctx.stage, 'Input:', input);
 
-        // 1. GREETING stage - initial conversation
+        // 0. CHECK KNOWLEDGE BASE FIRST (Global Interruption)
+        const faqAnswer = checkKnowledgeBase(input);
+        if (faqAnswer && ctx.stage !== 'CONFIRMING') {
+            speakWithElevenLabs(faqAnswer);
+            return;
+        }
+
+        // 1. GREETING stage
         if (ctx.stage === 'GREETING') {
-            if (input.includes('book') || input.includes('session') || input.includes('studio') || input.includes('price') || input.includes('rate')) {
+            if (input.includes('book') || input.includes('session') || input.includes('studio') || input.includes('slot')) {
                 contextRef.current.stage = 'CHOOSING_STUDIO';
-                speakWithElevenLabs("Perfect! We have three studios available: Studio A is our flagship at $85/hr, Studio B is $75/hr, and Studio C is $65/hr. Which one sounds like the right fit for you?");
+                speakWithElevenLabs("Perfect! We have two studios available: Studio A is our flagship at $75/hr, and Studio B is $65/hr. Which one sounds like the right fit for you?");
                 return;
             }
         }
 
-        // 2. Handle Studio selection - works from any stage
-        if (input.includes('studio a') || input.includes('the vault')) {
+        // 2. Handle Studio selection
+        if (input.includes('studio a') || input.includes('main room')) {
             contextRef.current.studio = 'Studio A';
             contextRef.current.stage = 'CHOOSING_TIME';
-            speakWithElevenLabs("Excellent choice! Studio A is our flagship space with premium equipment. When were you looking to come in for your session?");
+            speakWithElevenLabs("Excellent choice! Studio A is our flagship space. When were you looking to come in?");
             return;
         }
 
         if (input.includes('studio b') || input.includes('the lab')) {
             contextRef.current.studio = 'Studio B';
             contextRef.current.stage = 'CHOOSING_TIME';
-            speakWithElevenLabs("Studio B is an amazing choice for production and mixing. What date and time works best for you?");
+            speakWithElevenLabs("Studio B is an amazing choice. What date and time works best for you?");
             return;
         }
 
-        if (input.includes('studio c') || input.includes('the booth') || input.includes('65')) {
-            contextRef.current.studio = 'Studio C';
-            contextRef.current.stage = 'CHOOSING_TIME';
-            speakWithElevenLabs("Studio C is our most popular for vocal tracking. When would you like to book it?");
-            return;
-        }
-
-        // 3. Handle Time/Date when in CHOOSING_TIME stage
+        // 3. Handle Time/Date
         if (ctx.stage === 'CHOOSING_TIME') {
             const hasDateTime = input.match(/\d+/) ||
                 input.includes('tomorrow') ||
                 input.includes('today') ||
-                input.includes('monday') ||
-                input.includes('tuesday') ||
-                input.includes('wednesday') ||
-                input.includes('thursday') ||
-                input.includes('friday') ||
-                input.includes('saturday') ||
-                input.includes('sunday') ||
-                input.includes('pm') ||
-                input.includes('am');
+                ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].some(d => input.includes(d));
 
             if (hasDateTime) {
+                const details = parseBookingDetails(input);
+
+                // CHECK AVAILABILITY
+                if (!isSlotAvailable(details.date, details.time, ctx.studio)) {
+                    speakWithElevenLabs(`I'm sorry, but ${ctx.studio} is already booked on ${details.date} at ${details.time}. Do you have another time in mind?`);
+                    return;
+                }
+
+                contextRef.current.date = details.date;
+                contextRef.current.time = details.time;
+                contextRef.current.duration = details.duration;
+
                 contextRef.current.stage = 'CONFIRMING';
-                speakWithElevenLabs(`Perfect! Let me check... Yes, we have that time available in ${ctx.studio}. Should I lock that in for you?`);
+                const totalPrice = (ctx.studio === 'Studio A' ? 75 : 65) * details.duration;
+                const deposit = totalPrice * 0.5;
+                speakWithElevenLabs(`Okay, I have ${details.date} at ${details.time} in ${ctx.studio}. The total is $${totalPrice}. to lock this in, I need to collect a 50% deposit of $${deposit}. Should I charge the card on file?`);
                 return;
             } else {
-                speakWithElevenLabs("Just let me know what day and time works for you, and I'll check our calendar.");
+                speakWithElevenLabs("Just let me know what day and time works for you, and I'll check our live calendar.");
                 return;
             }
         }
 
-        // 4. Handle confirmation
+        // 4. Handle confirmation -> Payment
         if (ctx.stage === 'CONFIRMING') {
-            if (input.includes('yes') || input.includes('yeah') || input.includes('sure') || input.includes('ok') || input.includes('please')) {
-                speakWithElevenLabs("Awesome! I've reserved that slot for you. You can complete your booking at thevaultstudios.com/book. Is there anything else I can help you with?");
-                contextRef.current.stage = 'GREETING';
+            if (input.includes('yes') || input.includes('charge') || input.includes('do it') || input.includes('sure') || input.includes('ok')) {
+                contextRef.current.stage = 'PAYMENT';
+                speakWithElevenLabs("Processing that now... One moment.");
+
+                // Simulate processing delay
+                setTimeout(() => {
+                    const totalPrice = (ctx.studio === 'Studio A' ? 75 : 65) * (ctx.duration || 2);
+                    const bookingData = {
+                        studio: ctx.studio === 'Studio A' ? 'Studio A (The Main Room)' : 'Studio B (The Lab)',
+                        date: ctx.date || new Date().toISOString().split('T')[0],
+                        time: ctx.time || "12:00",
+                        duration: ctx.duration || 2,
+                        price: totalPrice,
+                        status: 'Confirmed', // Instant confirmation with deposit
+                        source: 'AI Receptionist',
+                        paymentStatus: 'Deposit Paid' // New status
+                    };
+
+                    addNewBooking(bookingData);
+                    speakWithElevenLabs("Success! Your deposit is paid and your session is officially confirmed. Receipts are in your portal. taking care of business!");
+
+                    // Reset
+                    contextRef.current = { studio: null, date: null, time: null, duration: 2, stage: 'GREETING' };
+                }, 1500);
+                return;
+            } else if (input.includes('no') || input.includes('later')) {
+                speakWithElevenLabs("Understood. I can place a temporary hold, but it won't be confirmed until the deposit is settled online. Should I do that?");
+                // Could add a 'TENTATIVE' stage here, but keeping it simple for now
+                const totalPrice = (ctx.studio === 'Studio A' ? 75 : 65) * (ctx.duration || 2);
+                const bookingData = {
+                    studio: ctx.studio === 'Studio A' ? 'Studio A (The Main Room)' : 'Studio B (The Lab)',
+                    date: ctx.date || new Date().toISOString().split('T')[0],
+                    time: ctx.time || "12:00",
+                    duration: ctx.duration || 2,
+                    price: totalPrice,
+                    status: 'Pending',
+                    source: 'AI Receptionist',
+                    paymentStatus: 'Unpaid'
+                };
+                addNewBooking(bookingData);
+                contextRef.current = { studio: null, date: null, time: null, duration: 2, stage: 'GREETING' };
                 return;
             }
+        }
+
+        // PAYMENT Stage (Handling any follow-up if needed, though the timeout handles success)
+        if (ctx.stage === 'PAYMENT') {
+            // Usually we wouldn't be here listening unless silence/interruption? 
+            // The timeout above resets state. 
+            return;
         }
 
         // Default Fallback
-        if (ctx.stage === 'CHOOSING_STUDIO') {
-            speakWithElevenLabs("I didn't catch which studio you'd like. Would you prefer Studio A at $85/hr, Studio B at $75/hr, or Studio C at $65/hr?");
-        } else {
-            speakWithElevenLabs("I'm sorry, I didn't quite catch that. Are you looking to book a session with us?");
-        }
+        speakWithElevenLabs("I'm sorry, I didn't quite catch that. You can ask me about our gear, rules, or to book a session.");
     };
 
     if (!isOpen && callStatus === 'idle') {
