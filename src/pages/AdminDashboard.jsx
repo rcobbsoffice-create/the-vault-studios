@@ -18,12 +18,14 @@ import {
     Mail,
     Send,
     Eye,
-    LayoutDashboard
+    LayoutDashboard,
+    Play,
+    Pause
 } from 'lucide-react';
 import CalendarView from '../components/admin/CalendarView';
 
 const AdminDashboard = () => {
-    const { allUsers, updateArtistBounces, updateArtistBooking, deleteArtistBooking, addArtist, deleteArtist } = useAuth();
+    const { allUsers, updateArtistBounces, updateArtistBooking, deleteArtistBooking, addArtist, deleteArtist, uploadBounce } = useAuth();
 
     // View State
     const [currentView, setCurrentView] = useState('calendar'); // 'dashboard', 'calendar', 'clients'
@@ -45,6 +47,10 @@ const AdminDashboard = () => {
     // Marketing State
     const [newsletterForm, setNewsletterForm] = useState({ subject: '', body: '' });
 
+    // Audio Preview State
+    const [previewPlayingId, setPreviewPlayingId] = useState(null);
+    const audioPreviewRef = React.useRef(new Audio());
+
     // Forms
     const [paymentForm, setPaymentForm] = useState({
         transactionId: '',
@@ -63,6 +69,7 @@ const AdminDashboard = () => {
         title: '',
         sessionName: '',
         date: new Date().toISOString().split('T')[0],
+        type: 'Demo',
         file: null
     });
 
@@ -146,36 +153,126 @@ const AdminDashboard = () => {
         }
     };
 
-    const handleAddBounce = (e) => {
+    // State for Editing Client Profile
+    const [isEditingProfile, setIsEditingProfile] = useState(false);
+    const [profileForm, setProfileForm] = useState({ name: '', phone: '' });
+
+    const openEditProfile = () => {
+        if (selectedArtist) {
+            setProfileForm({ name: selectedArtist.name, phone: selectedArtist.phone || '' });
+            setIsEditingProfile(true);
+        }
+    };
+
+    const handleSaveProfile = async (e) => {
+        e.preventDefault();
+        const result = await updateUserProfile(selectedArtist.id, profileForm);
+        if (result.success) {
+            alert("✅ Client profile updated.");
+            setIsEditingProfile(false);
+        } else {
+            alert("Error: " + result.error);
+        }
+    };
+
+    const handleAddBounce = async (e) => {
         e.preventDefault();
         if (!selectedArtist || !formData.file) return;
 
-        const audioUrl = URL.createObjectURL(formData.file);
-        const newBounce = {
-            id: Date.now(),
+        // Show simplified loading indication (could be improved with a real UI state)
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerText;
+        submitBtn.innerText = "UPLOADING...";
+        submitBtn.disabled = true;
+
+        const result = await uploadBounce(selectedArtist.id, formData.file, {
             title: formData.title,
             sessionName: formData.sessionName,
             date: formData.date,
-            url: audioUrl,
-            fileName: formData.file.name
-        };
-
-        const updatedBounces = [...(selectedArtist.bounces || []), newBounce];
-        updateArtistBounces(selectedArtist.id, updatedBounces);
-
-        setFormData({
-            title: '',
-            sessionName: '',
-            date: new Date().toISOString().split('T')[0],
-            file: null
+            type: formData.type // 'Demo', 'Mixed', 'Master'
         });
+
+        if (result.success) {
+            // CONDITIONAL SMS NOTIFICATION
+            if (formData.type === 'Mix' || formData.type === 'Master') {
+                if (selectedArtist.phone && selectedArtist.preferences?.smsEnabled !== false) {
+                    const action = formData.type === 'Master' ? 'MASTERED' : 'MIXED';
+                    const msg = `THE VAULT: Your track '${formData.title}' has been ${action} and is ready for review in your dashboard.`;
+                    sendSMS(selectedArtist.phone, msg);
+                    alert(`✅ Track uploaded & SMS (${action}) Sent!`);
+                } else {
+                    alert("✅ Track uploaded (No SMS sent - Check phone/preferences)");
+                }
+            } else {
+                alert("✅ Track uploaded successfully!");
+            }
+
+            setFormData({
+                title: '',
+                sessionName: '',
+                date: new Date().toISOString().split('T')[0],
+                type: 'Demo',
+                file: null
+            });
+            setIsAddingMode(false);
+        } else {
+            alert("❌ Upload failed: " + result.error);
+        }
         setIsAddingMode(false);
+
+        // Reset button (if component didn't unmount/change view)
+        submitBtn.innerText = originalText;
+        submitBtn.disabled = false;
     };
 
     const handleDeleteBounce = (bounceId) => {
         if (!selectedArtist) return;
         const updatedBounces = selectedArtist.bounces.filter(b => b.id !== bounceId);
         updateArtistBounces(selectedArtist.id, updatedBounces);
+    };
+
+    const [editingBounceId, setEditingBounceId] = useState(null);
+    const [editBounceForm, setEditBounceForm] = useState(null);
+
+    const handleEditBounce = (bounce) => {
+        setEditingBounceId(bounce.id);
+        setEditBounceForm({ ...bounce });
+    };
+
+    const handleCancelEditBounce = () => {
+        setEditingBounceId(null);
+        setEditBounceForm(null);
+    };
+
+    const handleSaveBounce = async () => {
+        if (!selectedArtist || !editBounceForm) return;
+
+        const updatedBounces = selectedArtist.bounces.map(b =>
+            b.id === editingBounceId ? editBounceForm : b
+        );
+
+        await updateArtistBounces(selectedArtist.id, updatedBounces);
+        setEditingBounceId(null);
+        setEditBounceForm(null);
+        alert("✅ Bounce details updated!");
+    };
+
+    const togglePreview = (bounce) => {
+        const audio = audioPreviewRef.current;
+
+        if (previewPlayingId === bounce.id) {
+            // Pause
+            audio.pause();
+            setPreviewPlayingId(null);
+        } else {
+            // Play New
+            audio.src = bounce.url;
+            audio.play().catch(e => alert("Playback failed: " + e.message));
+            setPreviewPlayingId(bounce.id);
+
+            // Reset when done
+            audio.onended = () => setPreviewPlayingId(null);
+        }
     };
 
     // NEW: Handle Quick Actions from Booking Modal
@@ -187,7 +284,7 @@ const AdminDashboard = () => {
 
         updateArtistBooking(selectedArtistId, editingBooking.id, {
             status,
-            // If confirming, set payment status to Unpaid if not set, or leave as is? 
+            // If confirming, set payment status to Unpaid if not set, or leave as is?
             // Usually confirmation is independent of payment, but let's assume Unpaid if generic.
         });
         setIsBookingModalOpen(false);
@@ -618,19 +715,102 @@ const AdminDashboard = () => {
                                                                 <input placeholder="Title" value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} className="bg-black border border-white/10 rounded-lg p-3 text-white text-sm" />
                                                                 <input placeholder="Session Name" value={formData.sessionName} onChange={e => setFormData({ ...formData, sessionName: e.target.value })} className="bg-black border border-white/10 rounded-lg p-3 text-white text-sm" />
                                                             </div>
-                                                            <input type="file" onChange={handleFileChange} className="text-white text-sm" />
-                                                            <button type="submit" className="w-full bg-gold text-black py-3 rounded-lg font-bold uppercase tracking-widest text-xs">Upload</button>
+                                                            <div className="grid grid-cols-2 gap-4">
+                                                                <select
+                                                                    value={formData.type}
+                                                                    onChange={e => setFormData({ ...formData, type: e.target.value })}
+                                                                    className="bg-black border border-white/10 rounded-lg p-3 text-white text-sm outline-none focus:border-gold/50"
+                                                                >
+                                                                    <option value="Demo">Demo</option>
+                                                                    <option value="Mix">Mix</option>
+                                                                    <option value="Master">Master</option>
+                                                                </select>
+                                                                <input type="date" value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} className="bg-black border border-white/10 rounded-lg p-3 text-white text-sm" />
+                                                            </div>
+                                                            <div className="border border-dashed border-white/10 rounded-lg p-6 text-center hover:border-gold/30 transition-colors cursor-pointer relative">
+                                                                <input type="file" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                                                                {formData.file ? (
+                                                                    <p className="text-gold font-bold text-xs uppercase">{formData.file.name}</p>
+                                                                ) : (
+                                                                    <p className="text-zinc-500 font-bold text-xs uppercase">Click to Select Audio File</p>
+                                                                )}
+                                                            </div>
+                                                            <button type="submit" className="w-full bg-gold text-black py-3 rounded-lg font-bold uppercase tracking-widest text-xs hover:bg-white transition-colors">Upload</button>
                                                         </form>
                                                     )}
 
                                                     <div className="grid gap-3">
                                                         {(selectedArtist.bounces || []).map(bounce => (
-                                                            <div key={bounce.id} className="bg-zinc-900 border border-white/5 rounded-xl p-4 flex justify-between items-center">
-                                                                <div className="flex items-center gap-3">
-                                                                    <div className="w-10 h-10 bg-zinc-800 rounded-lg flex items-center justify-center"><Music size={20} className="text-zinc-500" /></div>
-                                                                    <div><p className="font-bold text-white text-sm">{bounce.title}</p><p className="text-xs text-zinc-500">{bounce.sessionName}</p></div>
-                                                                </div>
-                                                                <button onClick={() => handleDeleteBounce(bounce.id)} className="p-2 text-zinc-600 hover:text-red-500"><Trash2 size={16} /></button>
+                                                            <div key={bounce.id} className={`bg-zinc-900 border rounded-xl p-4 transition-all ${previewPlayingId === bounce.id ? 'border-gold/50 shadow-gold/10' : 'border-white/5'}`}>
+                                                                {editingBounceId === bounce.id ? (
+                                                                    <div className="space-y-3 w-full">
+                                                                        <input
+                                                                            value={editBounceForm.title}
+                                                                            onChange={e => setEditBounceForm({ ...editBounceForm, title: e.target.value })}
+                                                                            className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-white font-bold text-sm outline-none focus:border-gold/50"
+                                                                            placeholder="Track Title"
+                                                                        />
+                                                                        <div className="grid grid-cols-2 gap-2">
+                                                                            <input
+                                                                                value={editBounceForm.sessionName}
+                                                                                onChange={e => setEditBounceForm({ ...editBounceForm, sessionName: e.target.value })}
+                                                                                className="bg-black border border-white/10 rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-gold/50"
+                                                                                placeholder="Session Name"
+                                                                            />
+                                                                            <select
+                                                                                value={editBounceForm.type}
+                                                                                onChange={e => setEditBounceForm({ ...editBounceForm, type: e.target.value })}
+                                                                                className="bg-black border border-white/10 rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-gold/50"
+                                                                            >
+                                                                                <option value="Demo">Demo</option>
+                                                                                <option value="Mix">Mix</option>
+                                                                                <option value="Master">Master</option>
+                                                                            </select>
+                                                                        </div>
+                                                                        <input
+                                                                            type="date"
+                                                                            value={editBounceForm.date}
+                                                                            onChange={e => setEditBounceForm({ ...editBounceForm, date: e.target.value })}
+                                                                            className="w-full bg-black border border-white/10 rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-gold/50"
+                                                                        />
+                                                                        <div className="flex gap-2 pt-2">
+                                                                            <button onClick={handleSaveBounce} className="flex-1 bg-gold text-black py-2 rounded-lg font-bold text-xs uppercase hover:bg-white transition-colors">Save</button>
+                                                                            <button onClick={handleCancelEditBounce} className="flex-1 bg-zinc-800 text-white py-2 rounded-lg font-bold text-xs uppercase hover:bg-zinc-700 transition-colors">Cancel</button>
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="flex justify-between items-center w-full">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <button
+                                                                                onClick={() => togglePreview(bounce)}
+                                                                                className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${previewPlayingId === bounce.id ? 'bg-gold text-black' : 'bg-zinc-800 text-zinc-500 hover:text-white'}`}
+                                                                            >
+                                                                                {previewPlayingId === bounce.id ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
+                                                                            </button>
+                                                                            <div>
+                                                                                <div className="flex items-center gap-2 mb-1">
+                                                                                    <p className="font-bold text-white text-sm">{bounce.title}</p>
+                                                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest ${
+                                                                                bounce.type === 'Master' ? 'bg-gold text-black' :
+                                                                                bounce.type === 'Mix' ? 'bg-[#00D632]/10 text-[#00D632]' : 
+                                                                                'bg-yellow-500/10 text-yellow-500'
+                                                                            }`}>
+                                                                                {bounce.type || 'Demo'}
+                                                                            </span>
+                                                                                </div>
+                                                                                <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono">
+                                                                                    <span>{bounce.sessionName}</span>
+                                                                                    <span>•</span>
+                                                                                    <span>{bounce.date || new Date().toLocaleDateString()}</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex gap-2">
+                                                                            <button onClick={() => handleEditBounce(bounce)} className="p-2 text-zinc-600 hover:text-white transition-colors"><Edit2 size={16} /></button>
+                                                                            <button onClick={() => handleDeleteBounce(bounce.id)} className="p-2 text-zinc-600 hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         ))}
                                                     </div>

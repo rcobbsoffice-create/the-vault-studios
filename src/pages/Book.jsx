@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 
 const Book = () => {
     const { addToCart } = useBooking();
-    const { user, addPaymentMethod } = useAuth();
+    const { user, addPaymentMethod, addNewBooking } = useAuth();
     const navigate = useNavigate();
 
     const [selectedStudio, setSelectedStudio] = useState('Studio A (The Main Room)');
@@ -37,9 +37,10 @@ const Book = () => {
         }
     };
 
-    const handleConfirmPayment = (e) => {
+    const handleConfirmPayment = async (e) => {
         e.preventDefault();
 
+        // Prepare Payment Details
         let paymentDetails = { method: 'Stripe', status: 'Paid' };
 
         // If using new card, save it to wallet if logged in
@@ -54,14 +55,42 @@ const Book = () => {
                 return;
             }
         } else {
-            const card = user.wallet.find(c => c.id === selectedCardId);
-            paymentDetails.card = card;
+            const card = user?.wallet?.find(c => c.id === selectedCardId);
+            paymentDetails.card = card || { brand: 'Unknown', last4: '0000' };
         }
 
-        addToCart(selectedStudio, selectedDate, selectedTime, duration);
-        setIsPaymentModalOpen(false);
-        alert('✅ Booking confirmed! Payment processed successfully.');
-        navigate('/dashboard');
+        // Create Booking Data
+        const bookingData = {
+            studio: selectedStudio,
+            date: selectedDate,
+            time: selectedTime,
+            duration: duration,
+            price: getPrice(),
+            status: 'Confirmed',
+            paymentStatus: 'Paid',
+            paymentMethod: 'Credit Card', // Simplified
+            transactionId: 'TXN-' + Date.now().toString().slice(-6),
+            ...paymentDetails
+        };
+
+        try {
+            // Save to Firestore via AuthContext
+            const result = await addNewBooking(bookingData);
+
+            if (result.success) {
+                // Also add to local cart if needed, but primarily we rely on Firestore now
+                addToCart(selectedStudio, selectedDate, selectedTime, duration);
+
+                setIsPaymentModalOpen(false);
+                alert('✅ Booking confirmed! Payment processed successfully.');
+                navigate('/dashboard');
+            } else {
+                alert('Detailed Error: ' + result.error);
+            }
+        } catch (err) {
+            console.error(err);
+            alert('An unexpected error occurred.');
+        }
     };
 
     return (

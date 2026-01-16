@@ -1,0 +1,47 @@
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // Check if user is admin (Hardcoded email for safety + simple role check)
+    function isAdmin() {
+      return request.auth.token.email == 'admin@printlab.com' ||
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isSignedIn(); // Open read needed for Admin/Social, or restrict to isOwner || isAdmin
+      allow create: if isSignedIn(); // Signup
+      allow update: if isSignedIn() && (isOwner(userId) || isAdmin());
+      // allow delete: if isAdmin();
+    }
+
+    // Bookings Collection
+    match /bookings/{bookingId} {
+      // 1. Admin can read all.
+      // 2. User can read their own (matches 'where userId == auth.uid' query).
+      allow read: if isSignedIn() && (
+        isAdmin() || 
+        resource.data.userId == request.auth.uid || 
+        (resource == null && request.query.limit <= 100) // Allow list queries if they filter correctly?
+        // Actually, for list queries, the rule is evaluated against the POTENTIAL result set.
+        // If the query is `where('userId', '==', auth.uid)`, the 'resource.data.userId == auth.uid' rule works.
+      );
+      
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin());
+    }
+    
+    // Debug helper - fallback
+    match /{document=**} {
+      allow read, write: if false; 
+    }
+  }
+}

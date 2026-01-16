@@ -101,8 +101,8 @@ const AudioPlayer = ({ track }) => {
                     <button
                         onClick={togglePlay}
                         className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-500 shadow-2xl relative z-10 ${isPlaying
-                                ? 'bg-black text-gold border-2 border-gold/50 scale-110 shadow-gold/20'
-                                : 'bg-gold text-black hover:scale-105 active:scale-95 shadow-gold/10'
+                            ? 'bg-black text-gold border-2 border-gold/50 scale-110 shadow-gold/20'
+                            : 'bg-gold text-black hover:scale-105 active:scale-95 shadow-gold/10'
                             }`}
                     >
                         {isPlaying ? <Pause size={32} fill="currentColor" /> : <Play size={32} fill="currentColor" className="ml-1" />}
@@ -115,12 +115,22 @@ const AudioPlayer = ({ track }) => {
                         <div className="space-y-1">
                             <div className="flex items-center gap-3">
                                 <h4 className="font-display text-2xl font-black text-white uppercase tracking-tighter leading-none">{track.title}</h4>
-                                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/5 backdrop-blur-md">
+                                <div className="flex items-center gap-3">
                                     <Eye size={12} className="text-gold" />
                                     <span className="text-[10px] font-black text-zinc-300 tabular-nums uppercase tracking-widest">{track.viewCount || 0}</span>
                                 </div>
                             </div>
-                            <p className="text-gold text-[10px] font-black uppercase tracking-[0.2em] opacity-80">{track.sessionName}</p>
+                            <div className="flex items-center gap-3">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest ${track.type === 'Master' ? 'bg-gold text-black' :
+                                        track.type === 'Mix' ? 'bg-[#00D632]/10 text-[#00D632]' :
+                                            'bg-yellow-500/10 text-yellow-500'
+                                    }`}>
+                                    {track.type || 'Demo'}
+                                </span>
+                                <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.2em]">
+                                    {track.sessionName} • <span className="text-zinc-600">{track.date || 'Unknown Date'}</span>
+                                </p>
+                            </div>
                         </div>
                         <div className="text-[10px] font-mono text-gray-500 font-bold tracking-widest tabular-nums bg-black/40 px-3 py-1 rounded-lg">
                             {formatTime(currentTime)} <span className="text-white/20">/</span> {formatTime(duration)}

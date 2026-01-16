@@ -19,8 +19,15 @@ import {
     addDoc,
     serverTimestamp,
     updateDoc,
-    deleteDoc
+    deleteDoc,
+    arrayUnion
 } from 'firebase/firestore';
+import {
+    ref,
+    uploadBytes,
+    getDownloadURL
+} from 'firebase/storage';
+import { storage } from '../firebase';
 
 const AuthContext = createContext();
 
@@ -35,75 +42,139 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [allUsers, setAllUsers] = useState([]); // Artists (for Admin)
+    const [artists, setArtists] = useState([]); // Raw Artist List
+    const [adminBookings, setAdminBookings] = useState([]); // All Bookings (for Admin)
 
-    // Listen for Auth Changes
+    // Listen for Auth Changes & Real-time User Profile
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-            if (currentUser) {
-                // Get user role and extra data from Firestore
-                const userRef = doc(db, "users", currentUser.uid);
-                const userSnap = await getDoc(userRef);
+        let profileUnsubscribe;
 
-                if (userSnap.exists()) {
-                    setUser({ ...currentUser, ...userSnap.data() });
-                } else {
-                    // Provide fallback or create doc?
-                    setUser(currentUser);
-                }
+        const authUnsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+            // Clean up previous profile listener if any
+            if (profileUnsubscribe) {
+                profileUnsubscribe();
+                profileUnsubscribe = null;
+            }
+
+            if (currentUser) {
+                // 1. Set basic auth user first
+                // setUser({ ...currentUser }); // Optional, but let's wait for profile
+
+                // 2. Set up real-time listener for the Firestore User Document
+                const userRef = doc(db, "users", currentUser.uid);
+
+                profileUnsubscribe = onSnapshot(userRef, async (docSnap) => {
+                    if (docSnap.exists()) {
+                        const profileData = docSnap.data();
+                        // Merge auth object with firestore data
+                        setUser({
+                            ...currentUser,
+                            ...profileData,
+                            id: currentUser.uid // Ensure ID is accessible
+                        });
+                    } else {
+                        // Doc doesn't exist yet
+                        console.log("AuthContext: Profile missing for " + currentUser.email);
+
+                        // AUTO-SEED ADMIN
+                        if (currentUser.email === 'admin@printlab.com') {
+                            console.log("AuthContext: seeding Admin profile...");
+                            try {
+                                await setDoc(userRef, {
+                                    name: 'Master Admin',
+                                    email: currentUser.email,
+                                    role: 'ADMIN',
+                                    createdAt: serverTimestamp(),
+                                    wallet: [],
+                                    bounces: [],
+                                    bookings: []
+                                });
+                                console.log("AuthContext: Admin seeded.");
+                                // The snapshot will fire again automatically
+                                return;
+                            } catch (err) {
+                                console.error("AuthContext: Seeding failed", err);
+                            }
+                        }
+
+                        setUser({ ...currentUser, id: currentUser.uid });
+                    }
+                    setLoading(false);
+                }, (error) => {
+                    console.error("Error listening to user profile:", error);
+                    setLoading(false);
+                });
+
             } else {
                 setUser(null);
+                setLoading(false);
             }
-            setLoading(false);
         });
-        return () => unsubscribe();
+
+        return () => {
+            authUnsubscribe();
+            if (profileUnsubscribe) profileUnsubscribe();
+        };
     }, []);
 
     // Listen for Artists (For Admin View)
     useEffect(() => {
-        // Only run listener if user is Admin? For now run global so we have data.
-        // In prod, secure this.
+        if (!user) {
+            setArtists([]);
+            return;
+        }
+
         const q = query(collection(db, "users"), where("role", "==", "ARTIST"));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const users = snapshot.docs.map(doc => ({
                 id: doc.id,
-                ...doc.data(),
-                bookings: [] // We'll fetch bookings separately or nest them? 
-                // LocalStorage had nested bookings.
-                // Firebase: bookings are separate usually.
+                ...doc.data()
             }));
-
-            // Allow joining bookings?
-            // For this quick port, let's keep 'bookings' inside user state if possible
-            // OR change AdminDashboard to use a 'bookings' state.
-            // But AdminDashboard relies on `allUsers[i].bookings`.
-            // So we must fetch bookings for each user?
-            // To keep it simple: We'll fetch ALL bookings and distribute them to users here.
-
-            setAllUsers(users);
+            setArtists(users);
+        }, (error) => {
+            console.log("Error fetching users:", error);
         });
         return () => unsubscribe();
-    }, []);
+    }, [user]);
 
-    // Listen for Bookings and Distribute to Users
+    // Listen for Bookings (Scoped by Role)
     useEffect(() => {
-        const q = collection(db, "bookings");
+        if (!user) return;
+
+        let q;
+        const isAdmin = user.email?.includes('admin@printlab.com') || user.role === 'ADMIN';
+
+        if (isAdmin) {
+            // Admin sees all bookings
+            q = collection(db, "bookings");
+        } else {
+            // Regular users only see their own bookings
+            q = query(collection(db, "bookings"), where("userId", "==", user.uid));
+        }
+
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const bookings = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-            setAllUsers(prevUsers => prevUsers.map(u => ({
-                ...u,
-                bookings: bookings.filter(b => b.userId === u.id)
-            })));
+            if (isAdmin) {
+                // Store all bookings separately for Admin
+                setAdminBookings(bookings);
 
-            // Also update current user's bookings if they are logged in
-            if (user && bookings) {
-                const myBookings = bookings.filter(b => b.userId === user.uid || b.userId === user.id);
-                setUser(prev => ({ ...prev, bookings: myBookings }));
+                // Admin's own bookings
+                const myBookings = bookings.filter(b => b.userId === user.uid);
+                setUser(prev => prev ? ({ ...prev, bookings: myBookings }) : prev);
+
+            } else {
+                // Regular User - store directly in user object
+                setUser(prev => prev ? ({ ...prev, bookings: bookings }) : prev);
             }
+
+        }, (error) => {
+            console.log("Error fetching bookings:", error);
+            // If permission denied, it might be because the rule requires matches. 
         });
+
         return () => unsubscribe();
-    }, [user?.uid]); // dependency on user to restart listener? No, just run once.
+    }, [user?.uid, user?.role]); // Re-run if user ID or Role changes
 
     const signup = async (email, password, name) => {
         try {
@@ -220,16 +291,155 @@ export const AuthProvider = ({ children }) => {
         await updateDoc(userRef, { bounces: updatedBounces });
     };
 
+    const uploadBounce = async (artistId, file, metadata) => {
+        try {
+            // 1. Upload File
+            const storageRef = ref(storage, `bounces/${artistId}/${Date.now()}_${file.name}`);
+            const snapshot = await uploadBytes(storageRef, file);
+            const downloadURL = await getDownloadURL(snapshot.ref);
+
+            // 2. Create Metadata Object
+            const newBounce = {
+                id: Date.now(),
+                title: metadata.title,
+                sessionName: metadata.sessionName,
+                date: metadata.date,
+                type: metadata.type || 'Demo', // Default to Demo
+                url: downloadURL,
+                fileName: file.name,
+                uploadedAt: new Date().toISOString()
+            };
+
+            // 3. Update Firestore (using arrayUnion for atomicity)
+            const userRef = doc(db, "users", artistId);
+            await updateDoc(userRef, {
+                bounces: arrayUnion(newBounce)
+            });
+
+            return { success: true };
+        } catch (error) {
+            console.error("Upload error:", error);
+            return { success: false, error: error.message };
+        }
+    };
+
     const addArtist = async (artistData) => {
-        // Admin creates an artist doc. 
-        // NOTE: This user won't have an Auth account unless valid signup.
-        // For now, we just create the Firestore doc so they appear in list.
-        await addDoc(collection(db, "users"), {
-            ...artistData,
-            role: 'ARTIST',
-            bookings: [],
-            bounces: []
-        });
+        // Create a secondary app to create the user without logging out the admin
+        try {
+            const { initializeApp, getApp, deleteApp } = await import("firebase/app");
+            const { getAuth: getSecondaryAuth, createUserWithEmailAndPassword: createSecondaryUser, updateProfile: updateSecondaryProfile, signOut: signOutSecondary } = await import("firebase/auth");
+            const { firebaseConfig } = await import('../firebase');
+
+            // Initialize secondary app
+            const SECONDARY_APP_NAME = "secondaryApp";
+            let secondaryApp;
+            try {
+                secondaryApp = getApp(SECONDARY_APP_NAME);
+            } catch (e) {
+                secondaryApp = initializeApp(firebaseConfig, SECONDARY_APP_NAME);
+            }
+
+            const secondaryAuth = getSecondaryAuth(secondaryApp);
+
+            // Create User in Auth
+            const userCredential = await createSecondaryUser(secondaryAuth, artistData.email, artistData.password);
+            const newUser = userCredential.user;
+
+            // Update Profile (Display Name)
+            await updateSecondaryProfile(newUser, { displayName: artistData.name });
+
+            // Create Firestore Doc (Using the UID from Auth)
+            await setDoc(doc(db, "users", newUser.uid), {
+                name: artistData.name,
+                email: artistData.email,
+                phone: artistData.phone || "",
+                role: 'ARTIST',
+                createdAt: serverTimestamp(),
+                bookings: [],
+                bounces: [],
+                wallet: []
+            });
+
+            // Cleanup
+            await signOutSecondary(secondaryAuth);
+            // We usually don't need to delete the app immediately if we might reuse it, 
+            // but for safety in this context:
+            await deleteApp(secondaryApp);
+
+            return { success: true };
+        } catch (error) {
+            console.error("Error adding artist:", error);
+            return { success: false, error: error.message };
+        }
+    };
+
+    // --- SMS / Notification System ---
+    // --- SMS / Notification System ---
+    const sendSMS = async (to, body) => {
+        const accountSid = import.meta.env.VITE_TWILIO_ACCOUNT_SID;
+        const authToken = import.meta.env.VITE_TWILIO_AUTH_TOKEN;
+        const fromNumber = import.meta.env.VITE_TWILIO_FROM_NUMBER;
+
+        console.log(`[SMS SYSTEM] Initiating Send... To: ${to}`);
+
+        if (!to) return { success: false, error: "No phone number provided" };
+        if (!accountSid || !authToken) return { success: false, error: "Twilio credentials missing" };
+
+        const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+
+        // Encode payload for x-www-form-urlencoded
+        const formData = new URLSearchParams();
+        formData.append('To', to);
+        formData.append('From', fromNumber);
+        formData.append('Body', body);
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Basic ' + btoa(`${accountSid}:${authToken}`),
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                console.error("Twilio Error:", data);
+                return { success: false, error: data.message || "Failed to send SMS" };
+            }
+
+            console.log("SMS Sent Successfully:", data);
+            return { success: true, sid: data.sid };
+
+        } catch (error) {
+            console.error("SMS Network Error:", error);
+            // Fallback for CORS: warn user
+            return { success: false, error: "CORS/Network Error (Browser blocked it)" };
+        }
+    };
+
+    const updateUserProfile = async (uid, data) => {
+        try {
+            const userRef = doc(db, "users", uid);
+            await updateDoc(userRef, data);
+            if (user && user.id === uid) setUser(prev => ({ ...prev, ...data }));
+            return { success: true };
+        } catch (error) {
+            console.error("Profile Update Error:", error);
+            return { success: false, error: error.message };
+        }
+    };
+
+    const updateUserPreferences = async (uid, prefs) => {
+        try {
+            const userRef = doc(db, "users", uid);
+            await updateDoc(userRef, { preferences: prefs });
+            return { success: true };
+        } catch (error) {
+            return { success: false, error: error.message };
+        }
     };
 
     const deleteArtist = async (artistId) => {
@@ -262,9 +472,15 @@ export const AuthProvider = ({ children }) => {
     const incrementTrackViews = () => { }; // Todo
 
 
+    // Merge Artists and Bookings for Admin View
+    const derivedAllUsers = artists.map(artist => ({
+        ...artist,
+        bookings: adminBookings.filter(b => b.userId === artist.id)
+    }));
+
     const value = {
         user,
-        allUsers: allUsers.filter(u => u.role === 'ARTIST'),
+        allUsers: derivedAllUsers,
         signup,
         login,
         logout,
@@ -272,12 +488,16 @@ export const AuthProvider = ({ children }) => {
         deleteArtist,
         updateArtistBooking,
         updateArtistBounces,
+        uploadBounce,
         deleteArtistBooking,
         loginWithProvider,
         addNewBooking,
         addPaymentMethod,
         removePaymentMethod,
         incrementTrackViews,
+        updateUserProfile,
+        updateUserPreferences,
+        sendSMS,
         isAuthenticated: !!user,
         isAdmin: user?.email?.includes('admin') || user?.role === 'ADMIN', // Simple Admin Check
         loading
