@@ -33,13 +33,28 @@ const AudioPlayer = ({ track }) => {
         }
     }, [volume]);
 
-    const togglePlay = () => {
+    const togglePlay = async () => {
         if (!isPlaying) {
-            audioRef.current.play();
-            // Increment view count on first play
-            if (!hasIncrementedView.current && user) {
-                incrementTrackViews(user.id, track.id);
-                hasIncrementedView.current = true;
+            // Initialize AudioContext on user interaction (Mobile requirement)
+            if (!audioRef.current.audioContext) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) {
+                    audioRef.current.audioContext = new AudioContext();
+                }
+            }
+            if (audioRef.current.audioContext && audioRef.current.audioContext.state === 'suspended') {
+                await audioRef.current.audioContext.resume();
+            }
+
+            try {
+                await audioRef.current.play();
+                // Increment view count on first play
+                if (!hasIncrementedView.current && user) {
+                    incrementTrackViews(user.id, track.id);
+                    hasIncrementedView.current = true;
+                }
+            } catch (err) {
+                console.error("Playback failed", err);
             }
         } else {
             audioRef.current.pause();
@@ -122,8 +137,8 @@ const AudioPlayer = ({ track }) => {
                             </div>
                             <div className="flex items-center gap-3">
                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest ${track.type === 'Master' ? 'bg-gold text-black' :
-                                        track.type === 'Mix' ? 'bg-[#00D632]/10 text-[#00D632]' :
-                                            'bg-yellow-500/10 text-yellow-500'
+                                    track.type === 'Mix' ? 'bg-[#00D632]/10 text-[#00D632]' :
+                                        'bg-yellow-500/10 text-yellow-500'
                                     }`}>
                                     {track.type || 'Demo'}
                                 </span>
@@ -151,9 +166,9 @@ const AudioPlayer = ({ track }) => {
                 </div>
 
                 {/* Controls */}
-                <div className="flex items-center gap-6 text-gray-400 border-l border-white/5 pl-8 ml-2">
+                <div className="flex items-center justify-between w-full md:w-auto md:gap-6 text-gray-400 border-t border-white/5 pt-4 mt-4 md:border-t-0 md:pt-0 md:mt-0 md:border-l md:pl-8 md:ml-2">
                     <div className="flex items-center gap-3 group/volume">
-                        <button onClick={() => setIsMuted(!isMuted)} className="hover:text-gold transition-colors">
+                        <button onClick={() => setIsMuted(!isMuted)} className="hover:text-gold transition-colors p-2">
                             {isMuted || volume === 0 ? <VolumeX size={20} /> : <Volume2 size={20} />}
                         </button>
                         <input
@@ -163,7 +178,7 @@ const AudioPlayer = ({ track }) => {
                             step="0.01"
                             value={isMuted ? 0 : volume}
                             onChange={(e) => setVolume(parseFloat(e.target.value))}
-                            className="w-24 h-1 bg-white/5 rounded-full appearance-none cursor-pointer accent-gold opacity-0 group-hover/volume:opacity-100 transition-all"
+                            className="w-24 h-1 bg-white/5 rounded-full appearance-none cursor-pointer accent-gold transition-all"
                         />
                     </div>
 

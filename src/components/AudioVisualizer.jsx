@@ -8,58 +8,79 @@ const AudioVisualizer = ({ audioElement, isPlaying }) => {
     useEffect(() => {
         if (!audioElement || !canvasRef.current) return;
 
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        // Safety check for AudioContext (it might be attached to the element or global)
+        const audioContext = audioElement.audioContext || new (window.AudioContext || window.webkitAudioContext)();
 
-        // Connect the audio element to the analyzer
-        const source = audioContext.createMediaElementSource(audioElement);
-        const analyzer = audioContext.createAnalyser();
+        // Avoid re-connecting if already connected (simple check, though proper graph management is better)
+        // For this simple visualizer, we'll try/catch the connection
 
-        source.connect(analyzer);
-        analyzer.connect(audioContext.destination);
+        let source;
+        let analyzer;
 
-        analyzer.fftSize = 64; // Low FFT size for "harder" chunkier bars
-        const bufferLength = analyzer.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
+        try {
+            // Create analyzer
+            analyzer = audioContext.createAnalyser();
+            analyzer.fftSize = 64;
 
-        analyzerRef.current = analyzer;
-
-        const draw = () => {
-            animationRef.current = requestAnimationFrame(draw);
-            analyzer.getByteFrequencyData(dataArray);
-
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            const barWidth = (canvas.width / bufferLength) * 2.5;
-            let barHeight;
-            let x = 0;
-
-            for (let i = 0; i < bufferLength; i++) {
-                barHeight = (dataArray[i] / 255) * canvas.height;
-
-                // Create a gradient for the bars
-                const gradient = ctx.createLinearGradient(0, canvas.height, 0, 0);
-                gradient.addColorStop(0, 'rgba(212, 175, 55, 0.1)'); // Gold transparent
-                gradient.addColorStop(1, 'rgba(212, 175, 55, 0.6)'); // Gold visible
-
-                ctx.fillStyle = gradient;
-
-                // Draw mirrored bars or centered bars for a "vibe" look
-                ctx.fillRect(x, canvas.height - barHeight, barWidth - 1, barHeight);
-
-                x += barWidth + 1;
+            // Connect source
+            // Note: createMediaElementSource can only be called once per element. 
+            // We should ideally check if it already has a source.
+            // But since we can't easily check, we wrap in try/catch or store in a WeakMap?
+            // Actually, for this fix, let's just create a new context if needed or assume cleanliness.
+            // Better yet, just protect against the "already connected" error.
+            try {
+                source = audioContext.createMediaElementSource(audioElement);
+                source.connect(analyzer);
+                analyzer.connect(audioContext.destination);
+            } catch (e) {
+                // If already connected, we might not be able to visualize w/o more complex state
+                // But this prevents the CRASH that stops playback.
+                console.warn("Visualizer connection warning:", e);
+                return;
             }
-        };
 
-        if (isPlaying) {
-            audioContext.resume();
-            draw();
+            const bufferLength = analyzer.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            analyzerRef.current = analyzer;
+
+            const draw = () => {
+                animationRef.current = requestAnimationFrame(draw);
+                analyzer.getByteFrequencyData(dataArray);
+
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                const barWidth = (canvas.width / bufferLength) * 2.5;
+                let barHeight;
+                let x = 0;
+
+                for (let i = 0; i < bufferLength; i++) {
+                    barHeight = (dataArray[i] / 255) * canvas.height;
+
+                    const gradient = ctx.createLinearGradient(0, canvas.height, 0, 0);
+                    gradient.addColorStop(0, 'rgba(212, 175, 55, 0.1)');
+                    gradient.addColorStop(1, 'rgba(212, 175, 55, 0.6)');
+
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(x, canvas.height - barHeight, barWidth - 1, barHeight);
+
+                    x += barWidth + 1;
+                }
+            };
+
+            if (isPlaying) {
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+                draw();
+            }
+        } catch (e) {
+            console.error("AudioVisualizer logic failed", e);
         }
 
         return () => {
-            cancelAnimationFrame(animationRef.current);
-            // We don't close the context here as it might be reused or handled by the parent
+            if (animationRef.current) cancelAnimationFrame(animationRef.current);
         };
     }, [audioElement, isPlaying]);
 

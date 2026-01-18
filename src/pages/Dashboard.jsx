@@ -14,9 +14,11 @@ import {
     CreditCard,
     Trash2,
     User,
-    MessageSquare
+    MessageSquare,
+    PanelLeft
 } from 'lucide-react';
 import AudioPlayer from '../components/AudioPlayer';
+import MobileBottomNav from '../components/MobileBottomNav';
 
 const Dashboard = () => {
     const {
@@ -31,7 +33,7 @@ const Dashboard = () => {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('bookings'); // 'bookings', 'bounces', 'profile'
     const [newCardForm, setNewCardForm] = useState({ brand: 'visa', last4: '', expiry: '' });
-    const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Mobile state
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Still keep for Desktop/Tablet if needed, but mainly Mobile Nav now
 
     const handleAddCard = (e) => {
         e.preventDefault();
@@ -42,17 +44,15 @@ const Dashboard = () => {
     };
 
     return (
-        <div className="min-h-screen bg-black text-white p-4 lg:p-8 lg:pl-64">
+        <div className="min-h-screen bg-black text-white p-4 pt-24 pb-32 lg:p-8 lg:pt-28 lg:pl-64">
 
-            {/* Mobile Header */}
-            <div className="lg:hidden flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-gold rounded-lg flex items-center justify-center font-black text-black">V</div>
-                    <h1 className="font-display font-black text-lg tracking-tighter">THE VAULT</h1>
-                </div>
-                <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-white hover:bg-white/10 rounded-lg">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-                </button>
+            {/* Mobile Bottom Navigation */}
+            <MobileBottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
+
+            {/* Mobile Header - Just Title, No Toggle Needed (Nav is bottom) */}
+            <div className="lg:hidden flex items-center gap-3 mb-6 animate-in fade-in slide-in-from-top-4">
+                <div className="w-8 h-8 bg-gold rounded-lg flex items-center justify-center font-black text-black shadow-gold/20 shadow-lg">V</div>
+                <h1 className="font-display font-black text-xl tracking-tighter">THE VAULT</h1>
             </div>
 
             {/* Mobile Sidebar Overlay */}
