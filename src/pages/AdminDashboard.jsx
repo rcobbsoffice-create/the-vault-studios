@@ -20,9 +20,14 @@ import {
     Eye,
     LayoutDashboard,
     Play,
-    Pause
+    Pause,
+    Mic
 } from 'lucide-react';
 import CalendarView from '../components/admin/CalendarView';
+import EmailEditor from '../components/admin/EmailEditor';
+import VoiceDebugger from '../components/admin/VoiceDebugger';
+import { functions } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
 
 const AdminDashboard = () => {
     const { allUsers, updateArtistBounces, updateArtistBooking, deleteArtistBooking, addArtist, deleteArtist, uploadBounce } = useAuth();
@@ -298,10 +303,39 @@ const AdminDashboard = () => {
         setEditingBooking(null);
     };
 
-    const handleSendNewsletter = (e) => {
-        e.preventDefault();
-        alert(`Request Sent to Server:\nSubject: ${newsletterForm.subject}\nRecipients: ${allUsers.filter(u => u.role === 'ARTIST').length} Clients\n\n(This is a demo - no real email was sent)`);
-        setNewsletterForm({ subject: '', body: '' });
+    const handleSendNewsletter = async ({ subject, html }) => {
+        // e.preventDefault() is not needed as this is called component-internally with payload
+        const recipients = allUsers.filter(u => u.role === 'ARTIST').map(u => u.email).join(',');
+
+        // VISUAL FEEDBACK
+        alert(`Requesting Cloud Function...`);
+
+        try {
+            // Updated to use local dev function directly to bypass auth/emulator issues
+            const DEV_EMAIL_URL = 'http://localhost:5002';
+
+            const response = await fetch(DEV_EMAIL_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    to: 'demo-list@thevaultstudios.com',
+                    subject: subject,
+                    html: html
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                alert(`✅ Email sent successfully! (ID: ${result.messageId || 'Simulated'})`);
+                setNewsletterForm({ subject: '', body: '' });
+            } else {
+                throw new Error(result.error || result.message || 'Unknown error');
+            }
+        } catch (error) {
+            console.error("Email send failed:", error);
+            alert(`❌ Email Failed: ${error.message}`);
+        }
     };
 
     const handleCSVUpload = (e) => {
@@ -545,6 +579,12 @@ const AdminDashboard = () => {
                         </button>
                         <button onClick={() => setCurrentView('marketing')} className={`w-full p-4 rounded-xl flex items-center gap-3 font-bold uppercase tracking-widest text-xs transition-all ${currentView === 'marketing' ? 'bg-gold text-black shadow-lg shadow-gold/20' : 'bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>
                             <Mail size={18} /> Marketing
+                        </button>
+
+                        <div className="h-px bg-white/5 my-4"></div>
+
+                        <button onClick={() => setCurrentView('voice')} className={`w-full p-4 rounded-xl flex items-center gap-3 font-bold uppercase tracking-widest text-xs transition-all ${currentView === 'voice' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>
+                            <Mic size={18} /> Test Voice AI
                         </button>
                     </div>
 
@@ -790,13 +830,12 @@ const AdminDashboard = () => {
                                                                             <div>
                                                                                 <div className="flex items-center gap-2 mb-1">
                                                                                     <p className="font-bold text-white text-sm">{bounce.title}</p>
-                                                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest ${
-                                                                                bounce.type === 'Master' ? 'bg-gold text-black' :
-                                                                                bounce.type === 'Mix' ? 'bg-[#00D632]/10 text-[#00D632]' : 
-                                                                                'bg-yellow-500/10 text-yellow-500'
-                                                                            }`}>
-                                                                                {bounce.type || 'Demo'}
-                                                                            </span>
+                                                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest ${bounce.type === 'Master' ? 'bg-gold text-black' :
+                                                                                        bounce.type === 'Mix' ? 'bg-[#00D632]/10 text-[#00D632]' :
+                                                                                            'bg-yellow-500/10 text-yellow-500'
+                                                                                        }`}>
+                                                                                        {bounce.type || 'Demo'}
+                                                                                    </span>
                                                                                 </div>
                                                                                 <div className="flex items-center gap-2 text-xs text-zinc-500 font-mono">
                                                                                     <span>{bounce.sessionName}</span>
@@ -823,55 +862,38 @@ const AdminDashboard = () => {
                         )}
                         {/* 4. MARKETING VIEW */}
                         {currentView === 'marketing' && (
-                            <div className="animate-in fade-in slide-in-from-bottom-8 duration-500 grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                {/* CSV Import */}
-                                <div className="bg-zinc-950 border border-white/5 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden">
+                            <div className="animate-in fade-in slide-in-from-bottom-8 duration-500 space-y-8">
+                                {/* CSV Import - Compact */}
+                                <div className="bg-zinc-950 border border-white/5 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
                                     <div className="absolute inset-0 bg-noise opacity-[0.02] pointer-events-none"></div>
-                                    <div className="flex items-center gap-4 mb-6">
+                                    <div className="flex items-center gap-4">
                                         <div className="w-12 h-12 rounded-full bg-zinc-900 flex items-center justify-center border border-white/10">
                                             <Upload size={24} className="text-gold" />
                                         </div>
                                         <div>
                                             <h3 className="font-display text-2xl font-black text-white uppercase tracking-tighter">Import Clients</h3>
-                                            <p className="text-zinc-500 font-bold uppercase tracking-widest text-[10px]">Bulk add via CSV</p>
+                                            <p className="text-zinc-500 font-bold uppercase tracking-widest text-[10px]">Bulk add via CSV (Name, Email, Phone)</p>
                                         </div>
                                     </div>
 
-                                    <div className="border-2 border-dashed border-zinc-800 rounded-2xl p-10 text-center hover:border-gold/30 transition-colors group cursor-pointer relative">
+                                    <div className="border border-dashed border-zinc-800 rounded-2xl px-8 py-4 text-center hover:border-gold/30 transition-colors group cursor-pointer relative flex items-center gap-4 bg-black/50">
                                         <input type="file" accept=".csv" onChange={handleCSVUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                                        <Upload size={40} className="mx-auto text-zinc-700 group-hover:text-gold transition-colors mb-4" />
-                                        <p className="font-bold text-white uppercase tracking-wider text-sm">Drop CSV File Here to Upload</p>
-                                        <p className="text-zinc-600 text-[10px] font-bold uppercase tracking-widest mt-2">Format: Name, Email, Phone</p>
+                                        <Upload size={20} className="text-zinc-700 group-hover:text-gold transition-colors" />
+                                        <p className="font-bold text-white uppercase tracking-wider text-xs group-hover:text-gold transition-colors">Select CSV File</p>
                                     </div>
                                 </div>
 
-                                {/* Newsletter Blast */}
-                                <div className="bg-zinc-950 border border-white/5 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden">
-                                    <div className="absolute inset-0 bg-noise opacity-[0.02] pointer-events-none"></div>
-                                    <div className="flex items-center gap-4 mb-6">
-                                        <div className="w-12 h-12 rounded-full bg-zinc-900 flex items-center justify-center border border-white/10">
-                                            <Mail size={24} className="text-gold" />
-                                        </div>
-                                        <div>
-                                            <h3 className="font-display text-2xl font-black text-white uppercase tracking-tighter">Newsletter Blast</h3>
-                                            <p className="text-zinc-500 font-bold uppercase tracking-widest text-[10px]">Send updates to all clients</p>
-                                        </div>
-                                    </div>
-
-                                    <form onSubmit={handleSendNewsletter} className="space-y-4">
-                                        <div>
-                                            <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-2">Subject Line</label>
-                                            <input required value={newsletterForm.subject} onChange={e => setNewsletterForm({ ...newsletterForm, subject: e.target.value })} placeholder="e.g. New Studio Equipment!" className="w-full bg-black border border-white/10 rounded-2xl px-6 py-4 text-white font-bold focus:border-gold outline-none transition-all placeholder:text-zinc-800" />
-                                        </div>
-                                        <div>
-                                            <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-2">Message Body</label>
-                                            <textarea required value={newsletterForm.body} onChange={e => setNewsletterForm({ ...newsletterForm, body: e.target.value })} placeholder="Write your update here..." className="w-full bg-black border border-white/10 rounded-2xl px-6 py-4 text-white font-medium h-40 resize-none focus:border-gold outline-none transition-all placeholder:text-zinc-800" />
-                                        </div>
-                                        <button type="submit" className="w-full bg-gold text-black py-4 rounded-xl font-black uppercase tracking-widest hover:bg-yellow-500 transition-all active:scale-95 shadow-lg shadow-gold/10 flex items-center justify-center gap-3">
-                                            <Send size={18} /> Send Blast
-                                        </button>
-                                    </form>
+                                {/* AI Editor - Full Width */}
+                                <div className="animate-in fade-in duration-700 delay-100">
+                                    <EmailEditor onSend={handleSendNewsletter} />
                                 </div>
+                            </div>
+                        )}
+
+                        {/* 5. VOICE AI DEBUGGER (Temporary) */}
+                        {currentView === 'voice' && (
+                            <div className="animate-in fade-in slide-in-from-bottom-8 duration-500 flex justify-center">
+                                <VoiceDebugger />
                             </div>
                         )}
                     </div>

@@ -1,0 +1,29 @@
+{
+    "name": "functions",
+    "description": "Cloud Functions for The Vault Studios",
+    "scripts": {
+        "serve": "firebase emulators:start --only functions",
+        "shell": "firebase functions:shell",
+        "start": "npm run shell",
+        "deploy": "firebase deploy --only functions",
+        "logs": "firebase functions:log",
+        "lint": "echo 'No linting needed'",
+        "dev": "functions-framework --target=processSpeech --port=5001",
+        "dev:email": "functions-framework --target=sendEmailDev --port=5002"
+    },
+    "main": "index.js",
+    "dependencies": {
+        "cors": "^2.8.5",
+        "dotenv": "^17.2.3",
+        "firebase-admin": "^11.8.0",
+        "firebase-functions": "^4.3.1",
+        "nodemailer": "^6.9.13",
+        "openai": "^6.16.0",
+        "stripe": "^20.1.2",
+        "twilio": "^5.11.2"
+    },
+    "private": true,
+    "devDependencies": {
+        "@google-cloud/functions-framework": "^5.0.0"
+    }
+}

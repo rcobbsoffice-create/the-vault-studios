@@ -18,7 +18,7 @@ const Studios = () => {
             description: 'Perfect for production and mixing. Tuned for bass-heavy genres with a dedicated sub array.',
             price: 65,
             features: ['Avid S6', 'Genelec 8351', 'Vocal Booth', 'Production Suite'],
-            image: '/assets/studio_b.png'
+            image: '/assets/studio_b_v2.png'
         }
     ];
 

@@ -31,6 +31,7 @@ const Dashboard = () => {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('bookings'); // 'bookings', 'bounces', 'profile'
     const [newCardForm, setNewCardForm] = useState({ brand: 'visa', last4: '', expiry: '' });
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Mobile state
 
     const handleAddCard = (e) => {
         e.preventDefault();
@@ -41,13 +42,39 @@ const Dashboard = () => {
     };
 
     return (
-        <div className="min-h-screen bg-black text-white p-8 pl-64">
+        <div className="min-h-screen bg-black text-white p-4 lg:p-8 lg:pl-64">
+
+            {/* Mobile Header */}
+            <div className="lg:hidden flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-gold rounded-lg flex items-center justify-center font-black text-black">V</div>
+                    <h1 className="font-display font-black text-lg tracking-tighter">THE VAULT</h1>
+                </div>
+                <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-white hover:bg-white/10 rounded-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                </button>
+            </div>
+
+            {/* Mobile Sidebar Overlay */}
+            {isSidebarOpen && (
+                <div
+                    className="fixed inset-0 bg-black/80 backdrop-blur-sm z-40 lg:hidden"
+                    onClick={() => setIsSidebarOpen(false)}
+                ></div>
+            )}
+
             {/* Sidebar */}
-            <div className="fixed left-0 top-0 h-full w-64 bg-zinc-950/90 backdrop-blur-xl border-r border-white/5 p-6 flex flex-col justify-between z-50">
+            <div className={`fixed left-0 top-0 h-full w-64 bg-zinc-950/95 backdrop-blur-xl border-r border-white/5 p-6 flex flex-col justify-between z-50 transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
                 <div>
-                    <div className="flex items-center gap-3 mb-10 text-white">
-                        <div className="w-10 h-10 bg-gold rounded-xl flex items-center justify-center font-black text-black">V</div>
-                        <h1 className="font-display font-black text-xl tracking-tighter">THE VAULT</h1>
+                    <div className="flex items-center justify-between mb-10 text-white">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-gold rounded-xl flex items-center justify-center font-black text-black">V</div>
+                            <h1 className="font-display font-black text-xl tracking-tighter">THE VAULT</h1>
+                        </div>
+                        {/* Mobile Close Button */}
+                        <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden text-zinc-500 hover:text-white">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
                     </div>
 
                     <div className="space-y-6">
@@ -59,7 +86,7 @@ const Dashboard = () => {
 
                         <nav className="space-y-2">
                             <button
-                                onClick={() => setActiveTab('bookings')}
+                                onClick={() => { setActiveTab('bookings'); setIsSidebarOpen(false); }}
                                 className={`w-full flex items-center gap-4 p-4 rounded-xl transition-all ${activeTab === 'bookings' ? 'bg-gold text-black shadow-lg shadow-gold/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
                             >
                                 <Calendar size={20} />
@@ -67,7 +94,7 @@ const Dashboard = () => {
                             </button>
 
                             <button
-                                onClick={() => setActiveTab('bounces')}
+                                onClick={() => { setActiveTab('bounces'); setIsSidebarOpen(false); }}
                                 className={`w-full flex items-center gap-4 p-4 rounded-xl transition-all ${activeTab === 'bounces' ? 'bg-gold text-black shadow-lg shadow-gold/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
                             >
                                 <Headphones size={20} />
@@ -75,7 +102,7 @@ const Dashboard = () => {
                             </button>
 
                             <button
-                                onClick={() => setActiveTab('profile')}
+                                onClick={() => { setActiveTab('profile'); setIsSidebarOpen(false); }}
                                 className={`w-full flex items-center gap-4 p-4 rounded-xl transition-all ${activeTab === 'profile' ? 'bg-gold text-black shadow-lg shadow-gold/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
                             >
                                 <User size={20} />
@@ -92,9 +119,9 @@ const Dashboard = () => {
             </div>
 
             {/* Main Content Area */}
-            <div className="max-w-5xl mx-auto pt-4">
+            <div className="max-w-5xl mx-auto pt-0 lg:pt-4">
                 {/* Stats Header */}
-                <div className="grid grid-cols-3 gap-6 mb-12">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 mb-8 lg:mb-12">
                     <div className="bg-zinc-900 border border-white/5 rounded-2xl p-6 flex flex-col justify-between h-32 relative overflow-hidden group">
                         <div className="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Clock size={64} /></div>
                         <Calendar className="text-gold mb-4" size={24} />
@@ -129,12 +156,12 @@ const Dashboard = () => {
                     {/* BOOKINGS TAB */}
                     {activeTab === 'bookings' && (
                         <div className="animate-in fade-in duration-500">
-                            <div className="flex justify-between items-center mb-6">
-                                <h2 className="font-display text-3xl font-bold flex items-center gap-3">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                                <h2 className="font-display text-2xl lg:text-3xl font-bold flex items-center gap-3">
                                     <div className="w-1 h-8 bg-gold"></div>
                                     MY SESSIONS
                                 </h2>
-                                <Link to="/book" className="bg-white text-black px-6 py-3 rounded-xl font-bold uppercase text-xs tracking-widest hover:scale-105 transition-transform flex items-center gap-2">
+                                <Link to="/book" className="w-full md:w-auto bg-white text-black px-6 py-3 rounded-xl font-bold uppercase text-xs tracking-widest hover:scale-105 transition-transform flex items-center justify-center gap-2 shadow-lg shadow-white/10">
                                     <Plus size={16} /> New Booking
                                 </Link>
                             </div>
@@ -149,22 +176,22 @@ const Dashboard = () => {
                                 ) : (
                                     user.bookings.map((booking) => (
                                         <div key={booking.id} className="bg-zinc-900 border border-white/5 p-6 rounded-2xl hover:border-gold/30 transition-colors group">
-                                            <div className="flex justify-between items-center">
-                                                <div className="flex items-center gap-6">
-                                                    <div className="w-16 h-16 bg-black rounded-xl border border-white/10 flex flex-col items-center justify-center text-center">
+                                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                                <div className="flex items-center gap-4 lg:gap-6">
+                                                    <div className="w-16 h-16 bg-black rounded-xl border border-white/10 flex flex-col items-center justify-center text-center shrink-0">
                                                         <span className="text-xs text-zinc-500 font-bold uppercase">{new Date(booking.date).toLocaleString('default', { month: 'short' })}</span>
                                                         <span className="text-xl font-bold text-white">{new Date(booking.date).getDate()}</span>
                                                     </div>
                                                     <div>
-                                                        <h3 className="font-bold text-xl text-white mb-1 group-hover:text-gold transition-colors">{booking.studio} Tracking</h3>
-                                                        <div className="flex gap-4 text-sm text-zinc-400">
+                                                        <h3 className="font-bold text-lg lg:text-xl text-white mb-1 group-hover:text-gold transition-colors">{booking.studio} Tracking</h3>
+                                                        <div className="flex flex-wrap gap-2 lg:gap-4 text-sm text-zinc-400">
                                                             <div className="flex items-center gap-1"><Clock size={14} /> {booking.time} ({booking.duration}hrs)</div>
-                                                            <div className="flex items-center gap-1 text-green-500"><CheckCircle size={14} /> {booking.status}</div>
+                                                            <div className={`flex items-center gap-1 ${booking.status === 'Confirmed' ? 'text-green-500' : 'text-yellow-500'}`}><CheckCircle size={14} /> {booking.status}</div>
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <div className="text-right">
-                                                    <div className="text-xl font-bold text-white mb-1">${booking.price}</div>
+                                                <div className="text-right w-full md:w-auto flex flex-row md:flex-col justify-between items-center md:items-end border-t border-white/5 pt-4 md:border-none md:pt-0">
+                                                    <div className="text-xl font-bold text-white mb-0 md:mb-1">${booking.price}</div>
                                                     <div className="text-xs font-bold uppercase tracking-widest bg-white/5 text-zinc-400 py-1 px-3 rounded-full">{booking.paymentStatus}</div>
                                                 </div>
                                             </div>
@@ -178,7 +205,7 @@ const Dashboard = () => {
                     {/* BOUNCES TAB */}
                     {activeTab === 'bounces' && (
                         <div className="animate-in fade-in duration-500">
-                            <h2 className="font-display text-3xl font-bold mb-6 flex items-center gap-3">
+                            <h2 className="font-display text-2xl lg:text-3xl font-bold mb-6 flex items-center gap-3">
                                 <div className="w-1 h-8 bg-gold"></div>
                                 MY WAVE BOUNCES
                             </h2>
@@ -202,7 +229,7 @@ const Dashboard = () => {
                     {/* PROFILE TAB */}
                     {activeTab === 'profile' && (
                         <div className="animate-in fade-in duration-500 space-y-8">
-                            <h2 className="font-display text-3xl font-bold mb-6 flex items-center gap-3">
+                            <h2 className="font-display text-2xl lg:text-3xl font-bold mb-6 flex items-center gap-3">
                                 <div className="w-1 h-8 bg-gold"></div>
                                 MY PROFILE
                             </h2>
