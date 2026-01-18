@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import Navbar from './components/Navbar';
 import AIReceptionist from './components/AIReceptionist';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -64,6 +65,7 @@ function App() {
             />
           </Routes>
           <AIReceptionist />
+          <Analytics />
         </div>
       </ErrorBoundary>
     </Router>
