@@ -481,6 +481,7 @@ export const AuthProvider = ({ children }) => {
     const value = {
         user,
         allUsers: derivedAllUsers,
+        allBookings: adminBookings,
         signup,
         login,
         logout,

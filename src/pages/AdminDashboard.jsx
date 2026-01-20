@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAuth } from '../core/AuthContext';
 import {
     Users,
@@ -21,7 +21,11 @@ import {
     LayoutDashboard,
     Play,
     Pause,
-    Mic
+    Play,
+    Pause,
+    Mic,
+    Menu,
+    X
 } from 'lucide-react';
 import CalendarView from '../components/admin/CalendarView';
 import EmailEditor from '../components/admin/EmailEditor';
@@ -30,10 +34,11 @@ import { functions } from '../firebase';
 import { httpsCallable } from 'firebase/functions';
 
 const AdminDashboard = () => {
-    const { allUsers, updateArtistBounces, updateArtistBooking, deleteArtistBooking, addArtist, deleteArtist, uploadBounce } = useAuth();
+    const { allUsers, allBookings, updateArtistBounces, updateArtistBooking, deleteArtistBooking, addArtist, deleteArtist, uploadBounce, updateUserProfile } = useAuth();
 
     // View State
-    const [currentView, setCurrentView] = useState('calendar'); // 'dashboard', 'calendar', 'clients'
+    const [currentView, setCurrentView] = useState('dashboard'); // 'dashboard', 'calendar', 'clients', 'payments', 'marketing', 'voice'
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     // Selection State
     const [selectedArtistId, setSelectedArtistId] = useState(null);
@@ -80,10 +85,14 @@ const AdminDashboard = () => {
 
     // Derived Data
     const selectedArtist = allUsers.find(u => u.id === selectedArtistId);
-    const filteredArtists = allUsers.filter(artist =>
-        artist.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        artist.email.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+
+    // Optimized Filtering
+    const filteredArtists = useMemo(() => {
+        return allUsers.filter(artist =>
+            artist.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            artist.email.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [allUsers, searchTerm]);
 
     // Handlers
     const handleArtistSelect = (artist) => {
@@ -116,13 +125,14 @@ const AdminDashboard = () => {
 
     const handleProcessPayment = (booking, artistId = null) => {
         const artist = artistId ? allUsers.find(u => u.id === artistId) : selectedArtist;
-        if (!artist) return;
-        if (artistId && artistId !== selectedArtistId) setSelectedArtistId(artistId);
+        // if (!artist) return; // Removed to allow Guest bookings
+
+        if (artistId && artistId !== selectedArtistId && artistId !== 'guest') setSelectedArtistId(artistId);
 
         setProcessingBooking(booking);
         setPaymentForm({
             transactionId: '',
-            amount: booking.price.toString(),
+            amount: (booking.price || booking.totalCost || 0).toString(),
             note: `Payment for ${booking.studio} session on ${booking.date}`
         });
         setIsPaymentModalOpen(true);
@@ -133,15 +143,18 @@ const AdminDashboard = () => {
         // If processingBooking and selectedArtist/artistId is set
         const artist = selectedArtist || allUsers.find(u => u.id === processingBooking.clientId); // Fallback for calendar view
 
-        if (!artist || !processingBooking) return;
+        // Allow proceeding if processingBooking exists (Guest bookings have no artist)
+        if (!processingBooking) return;
 
         let method = 'Stripe';
         if (paymentMethod === 'CashApp') method = 'Cash App';
         if (paymentMethod === 'Manual') method = `Manual (${paymentForm.note || 'No Note'})`;
 
-        updateArtistBooking(artist.id, processingBooking.id, {
+        const artistId = artist ? artist.id : 'guest';
+
+        updateArtistBooking(artistId, processingBooking.id, {
             status: 'Confirmed',
-            paymentStatus: 'Paid',
+            paymentStatus: 'paid',
             paymentMethod: method,
             transactionId: paymentForm.transactionId,
             paidAmount: paymentForm.amount
@@ -303,12 +316,12 @@ const AdminDashboard = () => {
         setEditingBooking(null);
     };
 
-    const handleSendNewsletter = async ({ subject, html }) => {
-        // e.preventDefault() is not needed as this is called component-internally with payload
-        const recipients = allUsers.filter(u => u.role === 'ARTIST').map(u => u.email).join(',');
+    const handleSendNewsletter = async ({ to, subject, html }) => {
+        // Use provided recipient or fallback
+        const recipient = to || 'demo-list@thevaultstudios.com';
 
         // VISUAL FEEDBACK
-        alert(`Requesting Cloud Function...`);
+        alert(`Requesting Cloud Function to: ${recipient}`);
 
         try {
             // Updated to use local dev function directly to bypass auth/emulator issues
@@ -318,7 +331,7 @@ const AdminDashboard = () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    to: 'demo-list@thevaultstudios.com',
+                    to: recipient,
                     subject: subject,
                     html: html
                 })
@@ -565,25 +578,45 @@ const AdminDashboard = () => {
                     <p className="text-zinc-500 font-black uppercase tracking-[0.3em] text-[10px] opacity-80">Management Layer // Print Lab Sessions</p>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+                {/* Mobile Header */}
+                <div className="lg:hidden flex items-center justify-between p-6 bg-zinc-950 border-b border-white/10 sticky top-0 z-40">
+                    <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-gold rounded-full flex items-center justify-center font-black text-black text-xs">V</div>
+                        <span className="font-display font-bold text-white uppercase tracking-tighter">Admin</span>
+                    </div>
+                    <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="text-white">
+                        {isMobileMenuOpen ? <X /> : <Menu />}
+                    </button>
+                </div>
+
+                <div className="lg:col-span-12 grid grid-cols-1 lg:grid-cols-12 gap-10">
                     {/* Navigation Sidebar */}
-                    <div className="lg:col-span-2 space-y-4">
-                        <button onClick={() => setCurrentView('dashboard')} className={`w-full p-4 rounded-xl flex items-center gap-3 font-bold uppercase tracking-widest text-xs transition-all ${currentView === 'dashboard' ? 'bg-gold text-black shadow-lg shadow-gold/20' : 'bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>
+                    <div className={`lg:col-span-2 space-y-4 lg:block ${isMobileMenuOpen ? 'block fixed inset-0 z-50 bg-black p-6 animate-in slide-in-from-left' : 'hidden'} lg:static lg:bg-transparent lg:p-0`}>
+                        {isMobileMenuOpen && (
+                            <div className="flex justify-between items-center mb-8 lg:hidden">
+                                <h2 className="font-display text-2xl text-white font-bold">MENU</h2>
+                                <button onClick={() => setIsMobileMenuOpen(false)}><X className="text-white" /></button>
+                            </div>
+                        )}
+                        <button onClick={() => { setCurrentView('dashboard'); setIsMobileMenuOpen(false); }} className={`w-full p-4 rounded-xl flex items-center gap-3 font-bold uppercase tracking-widest text-xs transition-all ${currentView === 'dashboard' ? 'bg-gold text-black shadow-lg shadow-gold/20' : 'bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>
                             <LayoutDashboard size={18} /> Dashboard
                         </button>
-                        <button onClick={() => setCurrentView('calendar')} className={`w-full p-4 rounded-xl flex items-center gap-3 font-bold uppercase tracking-widest text-xs transition-all ${currentView === 'calendar' ? 'bg-gold text-black shadow-lg shadow-gold/20' : 'bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>
+                        <button onClick={() => { setCurrentView('calendar'); setIsMobileMenuOpen(false); }} className={`w-full p-4 rounded-xl flex items-center gap-3 font-bold uppercase tracking-widest text-xs transition-all ${currentView === 'calendar' ? 'bg-gold text-black shadow-lg shadow-gold/20' : 'bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>
                             <Calendar size={18} /> Schedule
                         </button>
-                        <button onClick={() => setCurrentView('clients')} className={`w-full p-4 rounded-xl flex items-center gap-3 font-bold uppercase tracking-widest text-xs transition-all ${currentView === 'clients' ? 'bg-gold text-black shadow-lg shadow-gold/20' : 'bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>
+                        <button onClick={() => { setCurrentView('clients'); setIsMobileMenuOpen(false); }} className={`w-full p-4 rounded-xl flex items-center gap-3 font-bold uppercase tracking-widest text-xs transition-all ${currentView === 'clients' ? 'bg-gold text-black shadow-lg shadow-gold/20' : 'bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>
                             <Users size={18} /> Clients
                         </button>
-                        <button onClick={() => setCurrentView('marketing')} className={`w-full p-4 rounded-xl flex items-center gap-3 font-bold uppercase tracking-widest text-xs transition-all ${currentView === 'marketing' ? 'bg-gold text-black shadow-lg shadow-gold/20' : 'bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>
+                        <button onClick={() => { setCurrentView('payments'); setIsMobileMenuOpen(false); }} className={`w-full p-4 rounded-xl flex items-center gap-3 font-bold uppercase tracking-widest text-xs transition-all ${currentView === 'payments' ? 'bg-gold text-black shadow-lg shadow-gold/20' : 'bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>
+                            <DollarSign size={18} /> Payments
+                        </button>
+                        <button onClick={() => { setCurrentView('marketing'); setIsMobileMenuOpen(false); }} className={`w-full p-4 rounded-xl flex items-center gap-3 font-bold uppercase tracking-widest text-xs transition-all ${currentView === 'marketing' ? 'bg-gold text-black shadow-lg shadow-gold/20' : 'bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>
                             <Mail size={18} /> Marketing
                         </button>
 
                         <div className="h-px bg-white/5 my-4"></div>
 
-                        <button onClick={() => setCurrentView('voice')} className={`w-full p-4 rounded-xl flex items-center gap-3 font-bold uppercase tracking-widest text-xs transition-all ${currentView === 'voice' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>
+                        <button onClick={() => { setCurrentView('voice'); setIsMobileMenuOpen(false); }} className={`w-full p-4 rounded-xl flex items-center gap-3 font-bold uppercase tracking-widest text-xs transition-all ${currentView === 'voice' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>
                             <Mic size={18} /> Test Voice AI
                         </button>
                     </div>
@@ -598,25 +631,75 @@ const AdminDashboard = () => {
                                     const artists = allUsers.filter(u => u.role === 'ARTIST');
                                     const totalRevenue = artists.reduce((acc, artist) => acc + (artist.bookings || []).reduce((sum, b) => b.status === 'Confirmed' ? sum + (b.price || 0) : sum, 0), 0);
 
+                                    // Revenue Trend Logic (Last 6 Months)
+                                    const revenueData = useMemo(() => {
+                                        const months = [];
+                                        for (let i = 5; i >= 0; i--) {
+                                            const d = new Date();
+                                            d.setMonth(d.getMonth() - i);
+                                            months.push({
+                                                name: d.toLocaleString('default', { month: 'short' }),
+                                                month: d.getMonth(),
+                                                year: d.getFullYear(),
+                                                total: 0
+                                            });
+                                        }
+
+                                        (allBookings || []).forEach(b => {
+                                            if (b.status === 'Confirmed' || b.paymentStatus === 'paid') {
+                                                const d = new Date(b.date);
+                                                const m = months.find(mo => mo.month === d.getMonth() && mo.year === d.getFullYear());
+                                                if (m) m.total += (parseFloat(b.price) || 0);
+                                            }
+                                        });
+
+                                        const max = Math.max(...months.map(m => m.total), 1); // Avoid div/0
+                                        return months.map(m => ({ ...m, percent: (m.total / max) * 100 }));
+                                    }, [allBookings]);
+
                                     return (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div className="bg-zinc-900 border border-white/10 rounded-3xl p-8 card-hover group relative overflow-hidden">
-                                                <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity"><Users size={80} className="text-gold" /></div>
-                                                <div className="relative z-10">
-                                                    <p className="text-gray-500 text-xs font-black uppercase tracking-[0.2em] mb-2">Total Registered Clients</p>
-                                                    <div className="flex items-baseline gap-3"><p className="text-5xl font-display font-bold text-white tracking-tighter">{artists.length}</p><span className="text-gold text-xs font-bold uppercase tracking-widest">Active Members</span></div>
-                                                    <div className="mt-6 flex items-center gap-2 text-green-500"><div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div><span className="text-[10px] font-bold uppercase tracking-widest">Growth Tracking Active</span></div>
+                                        <>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div className="bg-zinc-900 border border-white/10 rounded-3xl p-8 card-hover group relative overflow-hidden">
+                                                    <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity"><Users size={80} className="text-gold" /></div>
+                                                    <div className="relative z-10">
+                                                        <p className="text-gray-500 text-xs font-black uppercase tracking-[0.2em] mb-2">Total Registered Clients</p>
+                                                        <div className="flex items-baseline gap-3"><p className="text-5xl font-display font-bold text-white tracking-tighter">{artists.length}</p><span className="text-gold text-xs font-bold uppercase tracking-widest">Active Members</span></div>
+                                                        <div className="mt-6 flex items-center gap-2 text-green-500"><div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div><span className="text-[10px] font-bold uppercase tracking-widest">Growth Tracking Active</span></div>
+                                                    </div>
+                                                </div>
+                                                <div className="bg-zinc-900 border border-white/10 rounded-3xl p-8 card-hover group relative overflow-hidden">
+                                                    <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity"><DollarSign size={80} className="text-[#00D632]" /></div>
+                                                    <div className="relative z-10">
+                                                        <p className="text-gray-500 text-xs font-black uppercase tracking-[0.2em] mb-2">Confirmed Studio Revenue</p>
+                                                        <div className="flex items-baseline gap-3"><p className="text-5xl font-display font-bold text-white tracking-tighter">${totalRevenue.toLocaleString()}</p><span className="text-[#00D632] text-xs font-bold uppercase tracking-widest">Gross Revenue</span></div>
+                                                        <div className="mt-6 flex items-center gap-2 text-[#00D632]"><CheckCircle size={10} /><span className="text-[10px] font-bold uppercase tracking-widest">Verified Transitions Only</span></div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div className="bg-zinc-900 border border-white/10 rounded-3xl p-8 card-hover group relative overflow-hidden">
-                                                <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity"><DollarSign size={80} className="text-[#00D632]" /></div>
-                                                <div className="relative z-10">
-                                                    <p className="text-gray-500 text-xs font-black uppercase tracking-[0.2em] mb-2">Confirmed Studio Revenue</p>
-                                                    <div className="flex items-baseline gap-3"><p className="text-5xl font-display font-bold text-white tracking-tighter">${totalRevenue.toLocaleString()}</p><span className="text-[#00D632] text-xs font-bold uppercase tracking-widest">Gross Revenue</span></div>
-                                                    <div className="mt-6 flex items-center gap-2 text-[#00D632]"><CheckCircle size={10} /><span className="text-[10px] font-bold uppercase tracking-widest">Verified Transitions Only</span></div>
+
+                                            {/* REVENUE CHART */}
+                                            <div className="bg-zinc-950 border border-white/5 rounded-[2.5rem] p-8 mt-8">
+                                                <h3 className="font-display text-xl text-white mb-6 uppercase tracking-wider">Revenue Trend (6 Months)</h3>
+                                                <div className="h-48 flex items-end justify-between gap-2 md:gap-4 px-2">
+                                                    {revenueData.map((d, i) => (
+                                                        <div key={i} className="flex flex-col items-center justify-end h-full w-full group relative">
+                                                            {/* Tooltip */}
+                                                            <div className="absolute -top-10 opacity-0 group-hover:opacity-100 transition-opacity bg-white text-black text-[10px] font-bold px-2 py-1 rounded mb-1 whitespace-nowrap z-10">
+                                                                ${d.total.toLocaleString()}
+                                                            </div>
+                                                            <div
+                                                                className="w-full bg-zinc-800 rounded-t-lg group-hover:bg-gold transition-all relative overflow-hidden"
+                                                                style={{ height: `${d.percent}%` }}
+                                                            >
+                                                                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
+                                                            </div>
+                                                            <p className="text-[10px] font-bold text-zinc-600 mt-3 uppercase tracking-wider">{d.name}</p>
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             </div>
-                                        </div>
+                                        </>
                                     );
                                 })()}
                                 <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-12 text-center">
@@ -634,10 +717,114 @@ const AdminDashboard = () => {
                                     onEditBooking={(booking, clientId) => {
                                         setSelectedArtistId(clientId);
                                         setEditingBooking(booking);
-                                        setIsBookingModalOpen(true); // NEW: Open modal instead of switching views
+                                        setIsBookingModalOpen(true);
                                     }}
                                     onProcessPayment={handleProcessPayment}
                                 />
+                            </div>
+                        )}
+
+                        {/* 2.5 PAYMENTS VIEW */}
+                        {currentView === 'payments' && (
+                            <div className="space-y-8 animate-in fade-in duration-500">
+                                {(() => {
+                                    // 1. Enrich Bookings
+                                    const enrichedBookings = (allBookings || []).map(b => {
+                                        let artistName = 'Guest';
+                                        let artistId = null;
+
+                                        // Lookup Artist if linked
+                                        if (b.userId && b.userId !== 'guest') {
+                                            const artist = allUsers.find(u => u.id === b.userId);
+                                            if (artist) {
+                                                artistName = artist.name;
+                                                artistId = artist.id;
+                                            }
+                                        }
+
+                                        // Fallbacks for display
+                                        if (artistName === 'Guest') {
+                                            if (b.customerName) artistName = b.customerName; // From Stripe
+                                            else if (b.userPhone) artistName = `Waitlist (${b.userPhone})`; // From AI
+                                        }
+
+                                        // Ensure price is a number
+                                        const price = parseFloat(b.totalCost || b.price || 0);
+
+                                        return { ...b, artistName, artistId, price };
+                                    });
+
+                                    // 2. Sort & Calc
+                                    enrichedBookings.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+                                    const totalPending = enrichedBookings.reduce((sum, b) => b.paymentStatus !== 'paid' ? sum + b.price : sum, 0);
+                                    const totalCollected = enrichedBookings.reduce((sum, b) => b.paymentStatus === 'paid' ? sum + b.price : sum, 0);
+
+                                    return (
+                                        <>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div className="bg-zinc-900 border border-white/10 rounded-3xl p-8">
+                                                    <p className="text-gray-500 text-xs font-black uppercase tracking-[0.2em] mb-2">Pending Collections</p>
+                                                    <div className="flex items-baseline gap-3"><p className="text-4xl font-display font-bold text-white tracking-tighter">${totalPending.toLocaleString()}</p></div>
+                                                </div>
+                                                <div className="bg-zinc-900 border border-white/10 rounded-3xl p-8">
+                                                    <p className="text-gray-500 text-xs font-black uppercase tracking-[0.2em] mb-2">Total Collected</p>
+                                                    <div className="flex items-baseline gap-3"><p className="text-4xl font-display font-bold text-white tracking-tighter">${totalCollected.toLocaleString()}</p></div>
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-zinc-950 border border-white/5 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden">
+                                                <h3 className="font-display text-2xl font-black text-white uppercase tracking-tighter mb-8 flex items-center gap-3"><DollarSign size={24} className="text-gold" /> Payment Queue</h3>
+                                                <div className="space-y-4">
+                                                    {enrichedBookings.length === 0 ? (
+                                                        <p className="text-zinc-600 text-center py-10 font-bold uppercase tracking-widest text-xs">No active bookings found.</p>
+                                                    ) : (
+                                                        enrichedBookings.map((booking, idx) => (
+                                                            <div key={`${booking.id}-${idx}`} className="bg-black border border-white/5 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 group hover:border-gold/30 transition-all">
+                                                                <div className="flex items-center gap-6 w-full md:w-auto">
+                                                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl ${booking.paymentStatus === 'paid' ? 'bg-[#00D632]/20 text-[#00D632]' : 'bg-red-500/20 text-red-500'}`}>
+                                                                        $
+                                                                    </div>
+                                                                    <div>
+                                                                        <h4 className="font-bold text-white uppercase text-sm mb-1">{booking.artistName} <span className="text-zinc-600 mx-2">//</span> {booking.studio}</h4>
+                                                                        <div className="flex gap-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                                                                            <span>{booking.date} @ {booking.time} ({booking.duration}h)</span>
+                                                                            <span>Book # {booking.id.toString().slice(-4)}</span>
+                                                                        </div>
+                                                                        {/* Status Indicator for AI Bookings */}
+                                                                        {booking.status === 'pending_payment' && (
+                                                                            <div className="mt-2 text-[10px] text-gold font-bold uppercase tracking-widest animate-pulse">
+                                                                                Waiting for Deposit
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="flex items-center gap-8 w-full md:w-auto justify-between md:justify-end">
+                                                                    <div className="text-right">
+                                                                        <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1">{booking.paymentStatus === 'paid' ? 'Paid Amount' : 'Balance Due'}</p>
+                                                                        <p className={`font-display text-xl font-black ${booking.paymentStatus === 'paid' ? 'text-[#00D632]' : 'text-white'}`}>${booking.price}</p>
+                                                                        {booking.depositAmount && booking.status === 'confirmed' && (
+                                                                            <p className="text-[9px] text-zinc-500 font-bold uppercase mt-1">
+                                                                                (Paid: ${booking.depositAmount})
+                                                                            </p>
+                                                                        )}
+                                                                    </div>
+
+                                                                    {booking.paymentStatus !== 'paid' && (
+                                                                        <button onClick={() => handleProcessPayment(booking, booking.artistId)} className="bg-gold text-black px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-white transition-all shadow-lg shadow-gold/10 whitespace-nowrap">
+                                                                            Collect Balance
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </>
+                                    );
+                                })()}
                             </div>
                         )}
 
@@ -691,7 +878,11 @@ const AdminDashboard = () => {
                                                     <div className="grid grid-cols-3 gap-6 mb-8">
                                                         <div className="bg-zinc-950 border border-white/5 rounded-3xl p-6 flex flex-col justify-center relative overflow-hidden"><p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1">Total Artist Spend</p><div className="flex items-center gap-2"><DollarSign size={16} className="text-gold" /><span className="text-2xl font-display font-black text-white">${totalInvested.toLocaleString()}</span></div></div>
                                                         <div className="bg-zinc-950 border border-white/5 rounded-3xl p-6 flex flex-col justify-center relative overflow-hidden"><p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1">Audio Engagement</p><div className="flex items-center gap-2"><Eye size={16} className="text-gold" /><span className="text-2xl font-display font-black text-white">{(selectedArtist.bounces || []).length} Tracks</span></div></div>
-                                                        <div className="bg-zinc-950 border border-white/5 rounded-3xl p-6 flex flex-col justify-center relative overflow-hidden"><p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1">Confirmed Sessions</p><div className="flex items-center gap-2"><CheckCircle size={16} className="text-gold" /><span className="text-2xl font-display font-black text-white">{(selectedArtist.bookings || []).filter(b => b.status === 'Confirmed').length} Visits</span></div></div>
+                                                        <div className="bg-zinc-950 border border-white/5 rounded-3xl p-6 flex flex-col justify-center relative overflow-hidden group cursor-pointer hover:border-gold/30 transition-all" onClick={openEditProfile}>
+                                                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"><Edit2 size={14} className="text-gold" /></div>
+                                                            <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1">Client Profile</p>
+                                                            <div className="flex items-center gap-2"><Users size={16} className="text-gold" /><span className="text-xl font-display font-bold text-white truncate max-w-[120px]">Edit Details</span></div>
+                                                        </div>
                                                     </div>
                                                 );
                                             })()}
@@ -723,7 +914,7 @@ const AdminDashboard = () => {
                                                                         <div className="flex items-center gap-3 mb-2">
                                                                             <h4 className="font-bold text-white uppercase">{booking.studio}</h4>
                                                                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest ${booking.status === 'Confirmed' ? 'bg-green-500/10 text-green-500' : 'bg-yellow-500/10 text-yellow-500'}`}>{booking.status}</span>
-                                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest ${booking.paymentStatus === 'Paid' ? 'bg-blue-500/10 text-blue-500' : 'bg-red-500/10 text-red-500'}`}>{booking.paymentStatus || 'Unpaid'}</span>
+                                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-widest ${booking.paymentStatus === 'paid' ? 'bg-blue-500/10 text-blue-500' : 'bg-red-500/10 text-red-500'}`}>{booking.paymentStatus || 'Unpaid'}</span>
                                                                         </div>
                                                                         <div className="flex gap-4 text-xs text-gray-500 font-mono">
                                                                             <span>{booking.date} @ {booking.time}</span>
@@ -732,7 +923,7 @@ const AdminDashboard = () => {
                                                                     </div>
                                                                     <div className="flex gap-2">
                                                                         <button onClick={() => setEditingBooking(booking)} className="p-2 text-zinc-500 hover:text-white"><Edit2 size={16} /></button>
-                                                                        {booking.paymentStatus !== 'Paid' && <button onClick={() => handleProcessPayment(booking)} className="p-2 text-green-500 hover:text-white"><DollarSign size={16} /></button>}
+                                                                        {booking.paymentStatus !== 'paid' && <button onClick={() => handleProcessPayment(booking)} className="p-2 text-green-500 hover:text-white"><DollarSign size={16} /></button>}
                                                                         <button onClick={() => handleDeleteBooking(booking.id)} className="p-2 text-zinc-500 hover:text-red-500"><Trash2 size={16} /></button>
                                                                     </div>
                                                                 </>
@@ -894,6 +1085,41 @@ const AdminDashboard = () => {
                         {currentView === 'voice' && (
                             <div className="animate-in fade-in slide-in-from-bottom-8 duration-500 flex justify-center">
                                 <VoiceDebugger />
+                            </div>
+                        )}
+
+                        {/* EDIT PROFILE MODAL */}
+                        {isEditingProfile && selectedArtist && (
+                            <div className="fixed inset-0 z-[130] flex items-center justify-center p-6 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300">
+                                <div className="bg-zinc-950 border border-gold/30 w-full max-w-md rounded-[2.5rem] p-10 shadow-[0_0_80px_rgba(212,175,55,0.15)] animate-in zoom-in-95 duration-300 relative overflow-hidden">
+                                    <div className="absolute inset-0 bg-noise opacity-[0.03] pointer-events-none"></div>
+                                    <h3 className="font-display text-3xl font-black text-white uppercase tracking-tighter mb-8">Edit <span className="text-gold">Client</span></h3>
+
+                                    <form onSubmit={handleSaveProfile} className="space-y-6">
+                                        <div>
+                                            <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-2">Display Name</label>
+                                            <input
+                                                type="text"
+                                                value={profileForm.name}
+                                                onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
+                                                className="w-full bg-black border border-white/10 rounded-2xl px-6 py-4 text-white font-bold focus:border-gold outline-none transition-all placeholder:text-zinc-800"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-2">Phone Number</label>
+                                            <input
+                                                type="text"
+                                                value={profileForm.phone}
+                                                onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
+                                                className="w-full bg-black border border-white/10 rounded-2xl px-6 py-4 text-white font-bold focus:border-gold outline-none transition-all placeholder:text-zinc-800"
+                                            />
+                                        </div>
+                                        <div className="flex gap-4 pt-4">
+                                            <button type="button" onClick={() => setIsEditingProfile(false)} className="flex-1 py-4 text-zinc-500 font-bold uppercase tracking-widest hover:text-white transition-colors">Cancel</button>
+                                            <button type="submit" className="flex-1 bg-gold text-black py-4 rounded-xl font-black uppercase tracking-widest hover:bg-yellow-500 transition-all active:scale-95 shadow-lg shadow-gold/10">Save Changes</button>
+                                        </div>
+                                    </form>
+                                </div>
                             </div>
                         )}
                     </div>

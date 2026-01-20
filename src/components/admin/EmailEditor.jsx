@@ -3,6 +3,7 @@ import { Send, Sparkles, Layout, Eye, Code, RefreshCw } from 'lucide-react';
 import { EmailTemplates } from './EmailTemplates';
 
 const EmailEditor = ({ onSend }) => {
+    const [to, setTo] = useState('');
     const [subject, setSubject] = useState('');
     const [htmlContent, setHtmlContent] = useState('');
     const [viewMode, setViewMode] = useState('edit'); // 'edit', 'preview'
@@ -81,9 +82,22 @@ const EmailEditor = ({ onSend }) => {
                 <div className="w-80 bg-zinc-900/50 border-r border-white/5 p-6 flex flex-col gap-6">
                     <div className="space-y-4">
                         <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Email Properties</label>
+
+                        {/* To Field */}
+                        <div className="space-y-1">
+                            <input
+                                placeholder="To: (e.g. artist@demo.com)"
+                                className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-white font-bold text-sm focus:border-gold/50 outline-none placeholder:text-zinc-700"
+                                value={to}
+                                onChange={e => setTo(e.target.value)}
+                            />
+                            <p className="text-[10px] text-zinc-600 px-1">Separate multiple emails with commas</p>
+                        </div>
+
+                        {/* Subject Field */}
                         <input
                             placeholder="Subject Line"
-                            className="w-full bg-black border border-white/10 rounded-xl p-4 text-white font-bold text-sm focus:border-gold/50 outline-none placeholder:text-zinc-800"
+                            className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-white font-bold text-sm focus:border-gold/50 outline-none placeholder:text-zinc-800"
                             value={subject}
                             onChange={e => setSubject(e.target.value)}
                         />
@@ -114,7 +128,7 @@ const EmailEditor = ({ onSend }) => {
                     </div>
 
                     <button
-                        onClick={() => onSend({ subject, html: htmlContent })}
+                        onClick={() => onSend({ to, subject, html: htmlContent })}
                         className="w-full bg-indigo-600 text-white py-4 rounded-xl font-black uppercase tracking-widest hover:bg-indigo-500 transition-all shadow-lg active:scale-95 flex items-center justify-center gap-3 group"
                     >
                         <Send size={18} className="group-hover:translate-x-1 transition-transform" /> Send Campaign

@@ -185,7 +185,7 @@ const CalendarView = ({ allUsers, onEditBooking, onProcessPayment }) => {
 
                                                 <div className="flex items-center justify-between text-[10px] bg-black/30 rounded px-1.5 py-1 backdrop-blur-sm">
                                                     <span className="text-zinc-400 font-mono">{booking.time}</span>
-                                                    {booking.paymentStatus !== 'Paid' ? (
+                                                    {booking.paymentStatus !== 'paid' ? (
                                                         <span
                                                             onClick={(e) => { e.stopPropagation(); onProcessPayment(booking, booking.clientId); }}
                                                             className="flex items-center gap-1 text-[#00D632] hover:text-white transition-colors cursor-pointer"
