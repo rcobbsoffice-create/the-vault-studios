@@ -18,6 +18,7 @@ export const AuthProvider = ({ children }) => {
     const [initialized, setInitialized] = useState(false);
     const [allUsers, setAllUsers] = useState([]);
     const [allBookings, setAllBookings] = useState([]);
+    const [allNotes, setAllNotes] = useState([]);
 
     const router = useRouter();
     const segments = useSegments();
@@ -26,17 +27,23 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             if (currentUser) {
-                // Listen to User Profile Logic (Simplified for Mobile Initial)
                 console.log("AuthContext: User detected", currentUser.email);
 
                 // Real-time listener for user profile
                 const userDocRef = doc(db, "users", currentUser.uid);
+                // wrapped in try-catch logic logic isn't needed here as onSnapshot handles it, 
+                // but we add the error callback from my previous thought process to be safe
                 const unsubProfile = onSnapshot(userDocRef, (docSnap) => {
                     if (docSnap.exists()) {
                         setUser({ ...currentUser, ...docSnap.data() });
                     } else {
                         setUser(currentUser);
                     }
+                    setLoading(false);
+                    setInitialized(true);
+                }, (error) => {
+                    console.error("AuthContext: Profile fetch error", error);
+                    setUser(currentUser);
                     setLoading(false);
                     setInitialized(true);
                 });
@@ -61,10 +68,8 @@ export const AuthProvider = ({ children }) => {
         const inTabsGroup = segments[0] === '(tabs)';
 
         if (user && !inTabsGroup) {
-            // User is logged in but not in the dashboard area -> Redirect to Dashboard
             router.replace('/(tabs)/dashboard');
         } else if (!user && inTabsGroup) {
-            // User is NOT logged in but is in the dashboard area -> Redirect to Login
             router.replace('/');
         }
     }, [user, initialized, segments]);
@@ -88,9 +93,23 @@ export const AuthProvider = ({ children }) => {
             setAllBookings(bookings);
         });
 
+        // Fetch Notes (Wrap in try-catch to be safe)
+        let unsubNotes = () => { };
+        try {
+            unsubNotes = onSnapshot(collection(db, "notes"), (snap) => {
+                const notes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                setAllNotes(notes);
+            }, (error) => {
+                console.warn("Notes listener error:", error);
+            });
+        } catch (e) {
+            console.warn("Failed to setup notes listener:", e);
+        }
+
         return () => {
             unsubUsers();
             unsubBookings();
+            unsubNotes();
         };
     }, [user]);
 
@@ -128,6 +147,7 @@ export const AuthProvider = ({ children }) => {
         loading,
         allUsers,
         allBookings,
+        allNotes,
         login,
         logout,
         updateUserProfile,

@@ -176,7 +176,7 @@ export const AuthProvider = ({ children }) => {
         return () => unsubscribe();
     }, [user?.uid, user?.role]); // Re-run if user ID or Role changes
 
-    const signup = async (email, password, name) => {
+    const signup = async (email, password, name, role = 'ARTIST') => {
         try {
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
             const newUser = userCredential.user;
@@ -185,10 +185,12 @@ export const AuthProvider = ({ children }) => {
             await setDoc(doc(db, "users", newUser.uid), {
                 name,
                 email,
-                role: 'ARTIST',
+                role: role || 'ARTIST',
                 createdAt: serverTimestamp(),
                 wallet: [],
-                bounces: []
+                bounces: [],
+                beats: [],
+                licensedBeats: []
             });
 
             // Update Auth Profile
@@ -459,6 +461,72 @@ export const AuthProvider = ({ children }) => {
         setUser(prev => ({ ...prev, wallet: updatedWallet }));
     };
 
+    const uploadBeat = async (producerId, file, stemsFile, metadata) => {
+        try {
+            // 1. Upload Preview File
+            const previewRef = ref(storage, `beats/${producerId}/${Date.now()}_preview_${file.name}`);
+            const previewSnapshot = await uploadBytes(previewRef, file);
+            const previewURL = await getDownloadURL(previewSnapshot.ref);
+
+            // 2. Upload Stems (Optional but recommended)
+            let stemsURL = null;
+            if (stemsFile) {
+                const stemsRef = ref(storage, `beats/${producerId}/${Date.now()}_stems_${stemsFile.name}`);
+                const stemsSnapshot = await uploadBytes(stemsRef, stemsFile);
+                stemsURL = await getDownloadURL(stemsSnapshot.ref);
+            }
+
+            // 3. Create Beat Object
+            const newBeat = {
+                id: Date.now().toString(),
+                producerId,
+                title: metadata.title,
+                genre: metadata.genre || 'Hip Hop',
+                bpm: metadata.bpm || '',
+                price: metadata.price || '29.99',
+                previewUrl: previewURL,
+                stemsUrl: stemsURL,
+                uploadedAt: new Date().toISOString()
+            };
+
+            // 4. Update Firestore Global Beats Collection
+            await setDoc(doc(db, "beats", newBeat.id), newBeat);
+
+            // 5. Update Producer's User Doc
+            const userRef = doc(db, "users", producerId);
+            await updateDoc(userRef, {
+                beats: arrayUnion(newBeat.id)
+            });
+
+            return { success: true, beat: newBeat };
+        } catch (error) {
+            console.error("Beat Upload error:", error);
+            return { success: false, error: error.message };
+        }
+    };
+
+    const licenseBeat = async (userId, beat) => {
+        try {
+            // In a real app, this would happen after Stripe payment
+            const userRef = doc(db, "users", userId);
+
+            const licenseInfo = {
+                ...beat,
+                licensedAt: new Date().toISOString(),
+                transactionId: `TXN_${Date.now()}`
+            };
+
+            await updateDoc(userRef, {
+                licensedBeats: arrayUnion(licenseInfo)
+            });
+
+            return { success: true };
+        } catch (error) {
+            console.error("Licensing error:", error);
+            return { success: false, error: error.message };
+        }
+    };
+
     const removePaymentMethod = async (cardId) => {
         if (!user) return;
         const updatedWallet = (user.wallet || []).filter(c => c.id !== cardId);
@@ -499,8 +567,11 @@ export const AuthProvider = ({ children }) => {
         updateUserProfile,
         updateUserPreferences,
         sendSMS,
+        uploadBeat,
+        licenseBeat,
         isAuthenticated: !!user,
-        isAdmin: user?.email?.includes('admin') || user?.role === 'ADMIN', // Simple Admin Check
+        isAdmin: user?.email?.includes('admin') || user?.role === 'ADMIN',
+        isProducer: user?.role === 'PRODUCER',
         loading
     };
 

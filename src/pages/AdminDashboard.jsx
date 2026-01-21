@@ -21,8 +21,6 @@ import {
     LayoutDashboard,
     Play,
     Pause,
-    Play,
-    Pause,
     Mic,
     Menu,
     X
@@ -93,6 +91,78 @@ const AdminDashboard = () => {
             artist.email.toLowerCase().includes(searchTerm.toLowerCase())
         );
     }, [allUsers, searchTerm]);
+
+    // --- REFACTORED: Top-Level Calculations to avoid Hook Violations ---
+
+    // 1. Revenue Stats
+    const artists = useMemo(() => allUsers.filter(u => u.role === 'ARTIST'), [allUsers]);
+
+    const totalRevenue = useMemo(() => {
+        return artists.reduce((acc, artist) => acc + (artist.bookings || []).reduce((sum, b) => b.status === 'Confirmed' ? sum + (b.price || 0) : sum, 0), 0);
+    }, [artists]);
+
+    // 2. Revenue Trend Logic (Last 6 Months)
+    const revenueData = useMemo(() => {
+        const months = [];
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date();
+            d.setMonth(d.getMonth() - i);
+            months.push({
+                name: d.toLocaleString('default', { month: 'short' }),
+                month: d.getMonth(),
+                year: d.getFullYear(),
+                total: 0
+            });
+        }
+
+        (allBookings || []).forEach(b => {
+            if (b.status === 'Confirmed' || b.paymentStatus === 'paid') {
+                const d = new Date(b.date);
+                const m = months.find(mo => mo.month === d.getMonth() && mo.year === d.getFullYear());
+                if (m) m.total += (parseFloat(b.price) || 0);
+            }
+        });
+
+        const max = Math.max(...months.map(m => m.total), 1); // Avoid div/0
+        return months.map(m => ({ ...m, percent: (m.total / max) * 100 }));
+    }, [allBookings]);
+
+    // 3. Enriched Bookings for Payments View
+    const enrichedBookings = useMemo(() => {
+        const bookings = (allBookings || []).map(b => {
+            let artistName = 'Guest';
+            let artistId = null;
+
+            // Lookup Artist if linked
+            if (b.userId && b.userId !== 'guest') {
+                const artist = allUsers.find(u => u.id === b.userId);
+                if (artist) {
+                    artistName = artist.name;
+                    artistId = artist.id;
+                }
+            }
+
+            // Fallbacks for display
+            if (artistName === 'Guest') {
+                if (b.customerName) artistName = b.customerName; // From Stripe
+                else if (b.userPhone) artistName = `Waitlist (${b.userPhone})`; // From AI
+            }
+
+            // Ensure price is a number
+            const price = parseFloat(b.totalCost || b.price || 0);
+
+            return { ...b, artistName, artistId, price };
+        });
+
+        // Sort by date descending
+        return bookings.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+    }, [allBookings, allUsers]);
+
+    const totalPending = useMemo(() => enrichedBookings.reduce((sum, b) => b.paymentStatus !== 'paid' ? sum + b.price : sum, 0), [enrichedBookings]);
+    const totalCollected = useMemo(() => enrichedBookings.reduce((sum, b) => b.paymentStatus === 'paid' ? sum + b.price : sum, 0), [enrichedBookings]);
+
+    // 4. Selected Artist Insights
+    const totalInvested = useMemo(() => (selectedArtist?.bookings || []).reduce((sum, b) => b.status === 'Confirmed' ? sum + (b.price || 0) : sum, 0), [selectedArtist]);
 
     // Handlers
     const handleArtistSelect = (artist) => {
@@ -627,81 +697,50 @@ const AdminDashboard = () => {
                         {/* 1. DASHBOARD VIEW */}
                         {currentView === 'dashboard' && (
                             <div className="space-y-8 animate-in fade-in duration-500">
-                                {(() => {
-                                    const artists = allUsers.filter(u => u.role === 'ARTIST');
-                                    const totalRevenue = artists.reduce((acc, artist) => acc + (artist.bookings || []).reduce((sum, b) => b.status === 'Confirmed' ? sum + (b.price || 0) : sum, 0), 0);
-
-                                    // Revenue Trend Logic (Last 6 Months)
-                                    const revenueData = useMemo(() => {
-                                        const months = [];
-                                        for (let i = 5; i >= 0; i--) {
-                                            const d = new Date();
-                                            d.setMonth(d.getMonth() - i);
-                                            months.push({
-                                                name: d.toLocaleString('default', { month: 'short' }),
-                                                month: d.getMonth(),
-                                                year: d.getFullYear(),
-                                                total: 0
-                                            });
-                                        }
-
-                                        (allBookings || []).forEach(b => {
-                                            if (b.status === 'Confirmed' || b.paymentStatus === 'paid') {
-                                                const d = new Date(b.date);
-                                                const m = months.find(mo => mo.month === d.getMonth() && mo.year === d.getFullYear());
-                                                if (m) m.total += (parseFloat(b.price) || 0);
-                                            }
-                                        });
-
-                                        const max = Math.max(...months.map(m => m.total), 1); // Avoid div/0
-                                        return months.map(m => ({ ...m, percent: (m.total / max) * 100 }));
-                                    }, [allBookings]);
-
-                                    return (
-                                        <>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                <div className="bg-zinc-900 border border-white/10 rounded-3xl p-8 card-hover group relative overflow-hidden">
-                                                    <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity"><Users size={80} className="text-gold" /></div>
-                                                    <div className="relative z-10">
-                                                        <p className="text-gray-500 text-xs font-black uppercase tracking-[0.2em] mb-2">Total Registered Clients</p>
-                                                        <div className="flex items-baseline gap-3"><p className="text-5xl font-display font-bold text-white tracking-tighter">{artists.length}</p><span className="text-gold text-xs font-bold uppercase tracking-widest">Active Members</span></div>
-                                                        <div className="mt-6 flex items-center gap-2 text-green-500"><div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div><span className="text-[10px] font-bold uppercase tracking-widest">Growth Tracking Active</span></div>
-                                                    </div>
-                                                </div>
-                                                <div className="bg-zinc-900 border border-white/10 rounded-3xl p-8 card-hover group relative overflow-hidden">
-                                                    <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity"><DollarSign size={80} className="text-[#00D632]" /></div>
-                                                    <div className="relative z-10">
-                                                        <p className="text-gray-500 text-xs font-black uppercase tracking-[0.2em] mb-2">Confirmed Studio Revenue</p>
-                                                        <div className="flex items-baseline gap-3"><p className="text-5xl font-display font-bold text-white tracking-tighter">${totalRevenue.toLocaleString()}</p><span className="text-[#00D632] text-xs font-bold uppercase tracking-widest">Gross Revenue</span></div>
-                                                        <div className="mt-6 flex items-center gap-2 text-[#00D632]"><CheckCircle size={10} /><span className="text-[10px] font-bold uppercase tracking-widest">Verified Transitions Only</span></div>
-                                                    </div>
-                                                </div>
+                                return (
+                                <>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="bg-zinc-900 border border-white/10 rounded-3xl p-8 card-hover group relative overflow-hidden">
+                                            <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity"><Users size={80} className="text-gold" /></div>
+                                            <div className="relative z-10">
+                                                <p className="text-gray-500 text-xs font-black uppercase tracking-[0.2em] mb-2">Total Registered Clients</p>
+                                                <div className="flex items-baseline gap-3"><p className="text-5xl font-display font-bold text-white tracking-tighter">{artists.length}</p><span className="text-gold text-xs font-bold uppercase tracking-widest">Active Members</span></div>
+                                                <div className="mt-6 flex items-center gap-2 text-green-500"><div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div><span className="text-[10px] font-bold uppercase tracking-widest">Growth Tracking Active</span></div>
                                             </div>
-
-                                            {/* REVENUE CHART */}
-                                            <div className="bg-zinc-950 border border-white/5 rounded-[2.5rem] p-8 mt-8">
-                                                <h3 className="font-display text-xl text-white mb-6 uppercase tracking-wider">Revenue Trend (6 Months)</h3>
-                                                <div className="h-48 flex items-end justify-between gap-2 md:gap-4 px-2">
-                                                    {revenueData.map((d, i) => (
-                                                        <div key={i} className="flex flex-col items-center justify-end h-full w-full group relative">
-                                                            {/* Tooltip */}
-                                                            <div className="absolute -top-10 opacity-0 group-hover:opacity-100 transition-opacity bg-white text-black text-[10px] font-bold px-2 py-1 rounded mb-1 whitespace-nowrap z-10">
-                                                                ${d.total.toLocaleString()}
-                                                            </div>
-                                                            <div
-                                                                className="w-full bg-zinc-800 rounded-t-lg group-hover:bg-gold transition-all relative overflow-hidden"
-                                                                style={{ height: `${d.percent}%` }}
-                                                            >
-                                                                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
-                                                            </div>
-                                                            <p className="text-[10px] font-bold text-zinc-600 mt-3 uppercase tracking-wider">{d.name}</p>
-                                                        </div>
-                                                    ))}
-                                                </div>
+                                        </div>
+                                        <div className="bg-zinc-900 border border-white/10 rounded-3xl p-8 card-hover group relative overflow-hidden">
+                                            <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity"><DollarSign size={80} className="text-[#00D632]" /></div>
+                                            <div className="relative z-10">
+                                                <p className="text-gray-500 text-xs font-black uppercase tracking-[0.2em] mb-2">Confirmed Studio Revenue</p>
+                                                <div className="flex items-baseline gap-3"><p className="text-5xl font-display font-bold text-white tracking-tighter">${totalRevenue.toLocaleString()}</p><span className="text-[#00D632] text-xs font-bold uppercase tracking-widest">Gross Revenue</span></div>
+                                                <div className="mt-6 flex items-center gap-2 text-[#00D632]"><CheckCircle size={10} /><span className="text-[10px] font-bold uppercase tracking-widest">Verified Transitions Only</span></div>
                                             </div>
-                                        </>
-                                    );
-                                })()}
+                                        </div>
+                                    </div>
+
+                                    {/* REVENUE CHART */}
+                                    <div className="bg-zinc-950 border border-white/5 rounded-[2.5rem] p-8 mt-8">
+                                        <h3 className="font-display text-xl text-white mb-6 uppercase tracking-wider">Revenue Trend (6 Months)</h3>
+                                        <div className="h-48 flex items-end justify-between gap-2 md:gap-4 px-2">
+                                            {revenueData.map((d, i) => (
+                                                <div key={i} className="flex flex-col items-center justify-end h-full w-full group relative">
+                                                    {/* Tooltip */}
+                                                    <div className="absolute -top-10 opacity-0 group-hover:opacity-100 transition-opacity bg-white text-black text-[10px] font-bold px-2 py-1 rounded mb-1 whitespace-nowrap z-10">
+                                                        ${d.total.toLocaleString()}
+                                                    </div>
+                                                    <div
+                                                        className="w-full bg-zinc-800 rounded-t-lg group-hover:bg-gold transition-all relative overflow-hidden"
+                                                        style={{ height: `${d.percent}%` }}
+                                                    >
+                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
+                                                    </div>
+                                                    <p className="text-[10px] font-bold text-zinc-600 mt-3 uppercase tracking-wider">{d.name}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </>
+                                );
                                 <div className="bg-zinc-900/50 border border-white/5 rounded-3xl p-12 text-center">
                                     <h3 className="font-display text-2xl text-zinc-500 uppercase tracking-widest">System Overview</h3>
                                     <p className="text-zinc-600 mt-2 font-bold text-xs uppercase tracking-wider">Select 'Schedule' to manage appointments or 'Clients' to manage records.</p>
@@ -727,104 +766,70 @@ const AdminDashboard = () => {
                         {/* 2.5 PAYMENTS VIEW */}
                         {currentView === 'payments' && (
                             <div className="space-y-8 animate-in fade-in duration-500">
-                                {(() => {
-                                    // 1. Enrich Bookings
-                                    const enrichedBookings = (allBookings || []).map(b => {
-                                        let artistName = 'Guest';
-                                        let artistId = null;
+                                return (
+                                <>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="bg-zinc-900 border border-white/10 rounded-3xl p-8">
+                                            <p className="text-gray-500 text-xs font-black uppercase tracking-[0.2em] mb-2">Pending Collections</p>
+                                            <div className="flex items-baseline gap-3"><p className="text-4xl font-display font-bold text-white tracking-tighter">${totalPending.toLocaleString()}</p></div>
+                                        </div>
+                                        <div className="bg-zinc-900 border border-white/10 rounded-3xl p-8">
+                                            <p className="text-gray-500 text-xs font-black uppercase tracking-[0.2em] mb-2">Total Collected</p>
+                                            <div className="flex items-baseline gap-3"><p className="text-4xl font-display font-bold text-white tracking-tighter">${totalCollected.toLocaleString()}</p></div>
+                                        </div>
+                                    </div>
 
-                                        // Lookup Artist if linked
-                                        if (b.userId && b.userId !== 'guest') {
-                                            const artist = allUsers.find(u => u.id === b.userId);
-                                            if (artist) {
-                                                artistName = artist.name;
-                                                artistId = artist.id;
-                                            }
-                                        }
-
-                                        // Fallbacks for display
-                                        if (artistName === 'Guest') {
-                                            if (b.customerName) artistName = b.customerName; // From Stripe
-                                            else if (b.userPhone) artistName = `Waitlist (${b.userPhone})`; // From AI
-                                        }
-
-                                        // Ensure price is a number
-                                        const price = parseFloat(b.totalCost || b.price || 0);
-
-                                        return { ...b, artistName, artistId, price };
-                                    });
-
-                                    // 2. Sort & Calc
-                                    enrichedBookings.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
-
-                                    const totalPending = enrichedBookings.reduce((sum, b) => b.paymentStatus !== 'paid' ? sum + b.price : sum, 0);
-                                    const totalCollected = enrichedBookings.reduce((sum, b) => b.paymentStatus === 'paid' ? sum + b.price : sum, 0);
-
-                                    return (
-                                        <>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                <div className="bg-zinc-900 border border-white/10 rounded-3xl p-8">
-                                                    <p className="text-gray-500 text-xs font-black uppercase tracking-[0.2em] mb-2">Pending Collections</p>
-                                                    <div className="flex items-baseline gap-3"><p className="text-4xl font-display font-bold text-white tracking-tighter">${totalPending.toLocaleString()}</p></div>
-                                                </div>
-                                                <div className="bg-zinc-900 border border-white/10 rounded-3xl p-8">
-                                                    <p className="text-gray-500 text-xs font-black uppercase tracking-[0.2em] mb-2">Total Collected</p>
-                                                    <div className="flex items-baseline gap-3"><p className="text-4xl font-display font-bold text-white tracking-tighter">${totalCollected.toLocaleString()}</p></div>
-                                                </div>
-                                            </div>
-
-                                            <div className="bg-zinc-950 border border-white/5 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden">
-                                                <h3 className="font-display text-2xl font-black text-white uppercase tracking-tighter mb-8 flex items-center gap-3"><DollarSign size={24} className="text-gold" /> Payment Queue</h3>
-                                                <div className="space-y-4">
-                                                    {enrichedBookings.length === 0 ? (
-                                                        <p className="text-zinc-600 text-center py-10 font-bold uppercase tracking-widest text-xs">No active bookings found.</p>
-                                                    ) : (
-                                                        enrichedBookings.map((booking, idx) => (
-                                                            <div key={`${booking.id}-${idx}`} className="bg-black border border-white/5 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 group hover:border-gold/30 transition-all">
-                                                                <div className="flex items-center gap-6 w-full md:w-auto">
-                                                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl ${booking.paymentStatus === 'paid' ? 'bg-[#00D632]/20 text-[#00D632]' : 'bg-red-500/20 text-red-500'}`}>
-                                                                        $
-                                                                    </div>
-                                                                    <div>
-                                                                        <h4 className="font-bold text-white uppercase text-sm mb-1">{booking.artistName} <span className="text-zinc-600 mx-2">//</span> {booking.studio}</h4>
-                                                                        <div className="flex gap-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
-                                                                            <span>{booking.date} @ {booking.time} ({booking.duration}h)</span>
-                                                                            <span>Book # {booking.id.toString().slice(-4)}</span>
-                                                                        </div>
-                                                                        {/* Status Indicator for AI Bookings */}
-                                                                        {booking.status === 'pending_payment' && (
-                                                                            <div className="mt-2 text-[10px] text-gold font-bold uppercase tracking-widest animate-pulse">
-                                                                                Waiting for Deposit
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-
-                                                                <div className="flex items-center gap-8 w-full md:w-auto justify-between md:justify-end">
-                                                                    <div className="text-right">
-                                                                        <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1">{booking.paymentStatus === 'paid' ? 'Paid Amount' : 'Balance Due'}</p>
-                                                                        <p className={`font-display text-xl font-black ${booking.paymentStatus === 'paid' ? 'text-[#00D632]' : 'text-white'}`}>${booking.price}</p>
-                                                                        {booking.depositAmount && booking.status === 'confirmed' && (
-                                                                            <p className="text-[9px] text-zinc-500 font-bold uppercase mt-1">
-                                                                                (Paid: ${booking.depositAmount})
-                                                                            </p>
-                                                                        )}
-                                                                    </div>
-
-                                                                    {booking.paymentStatus !== 'paid' && (
-                                                                        <button onClick={() => handleProcessPayment(booking, booking.artistId)} className="bg-gold text-black px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-white transition-all shadow-lg shadow-gold/10 whitespace-nowrap">
-                                                                            Collect Balance
-                                                                        </button>
-                                                                    )}
-                                                                </div>
+                                    <div className="bg-zinc-950 border border-white/5 rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden">
+                                        <h3 className="font-display text-2xl font-black text-white uppercase tracking-tighter mb-8 flex items-center gap-3"><DollarSign size={24} className="text-gold" /> Payment Queue</h3>
+                                        <div className="space-y-4">
+                                            {enrichedBookings.length === 0 ? (
+                                                <p className="text-zinc-600 text-center py-10 font-bold uppercase tracking-widest text-xs">No active bookings found.</p>
+                                            ) : (
+                                                enrichedBookings.map((booking, idx) => (
+                                                    <div key={`${booking.id}-${idx}`} className="bg-black border border-white/5 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 group hover:border-gold/30 transition-all">
+                                                        <div className="flex items-center gap-6 w-full md:w-auto">
+                                                            <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-xl ${booking.paymentStatus === 'paid' ? 'bg-[#00D632]/20 text-[#00D632]' : 'bg-red-500/20 text-red-500'}`}>
+                                                                $
                                                             </div>
-                                                        ))
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </>
-                                    );
-                                })()}
+                                                            <div>
+                                                                <h4 className="font-bold text-white uppercase text-sm mb-1">{booking.artistName} <span className="text-zinc-600 mx-2">//</span> {booking.studio}</h4>
+                                                                <div className="flex gap-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                                                                    <span>{booking.date} @ {booking.time} ({booking.duration}h)</span>
+                                                                    <span>Book # {booking.id.toString().slice(-4)}</span>
+                                                                </div>
+                                                                {/* Status Indicator for AI Bookings */}
+                                                                {booking.status === 'pending_payment' && (
+                                                                    <div className="mt-2 text-[10px] text-gold font-bold uppercase tracking-widest animate-pulse">
+                                                                        Waiting for Deposit
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-8 w-full md:w-auto justify-between md:justify-end">
+                                                            <div className="text-right">
+                                                                <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1">{booking.paymentStatus === 'paid' ? 'Paid Amount' : 'Balance Due'}</p>
+                                                                <p className={`font-display text-xl font-black ${booking.paymentStatus === 'paid' ? 'text-[#00D632]' : 'text-white'}`}>${booking.price}</p>
+                                                                {booking.depositAmount && booking.status === 'confirmed' && (
+                                                                    <p className="text-[9px] text-zinc-500 font-bold uppercase mt-1">
+                                                                        (Paid: ${booking.depositAmount})
+                                                                    </p>
+                                                                )}
+                                                            </div>
+
+                                                            {booking.paymentStatus !== 'paid' && (
+                                                                <button onClick={() => handleProcessPayment(booking, booking.artistId)} className="bg-gold text-black px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] hover:bg-white transition-all shadow-lg shadow-gold/10 whitespace-nowrap">
+                                                                    Collect Balance
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+                                </>
+                                );
                             </div>
                         )}
 
@@ -872,20 +877,15 @@ const AdminDashboard = () => {
                                     ) : (
                                         <div className="space-y-6">
                                             {/* Insights */}
-                                            {(() => {
-                                                const totalInvested = (selectedArtist.bookings || []).reduce((sum, b) => b.status === 'Confirmed' ? sum + (b.price || 0) : sum, 0);
-                                                return (
-                                                    <div className="grid grid-cols-3 gap-6 mb-8">
-                                                        <div className="bg-zinc-950 border border-white/5 rounded-3xl p-6 flex flex-col justify-center relative overflow-hidden"><p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1">Total Artist Spend</p><div className="flex items-center gap-2"><DollarSign size={16} className="text-gold" /><span className="text-2xl font-display font-black text-white">${totalInvested.toLocaleString()}</span></div></div>
-                                                        <div className="bg-zinc-950 border border-white/5 rounded-3xl p-6 flex flex-col justify-center relative overflow-hidden"><p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1">Audio Engagement</p><div className="flex items-center gap-2"><Eye size={16} className="text-gold" /><span className="text-2xl font-display font-black text-white">{(selectedArtist.bounces || []).length} Tracks</span></div></div>
-                                                        <div className="bg-zinc-950 border border-white/5 rounded-3xl p-6 flex flex-col justify-center relative overflow-hidden group cursor-pointer hover:border-gold/30 transition-all" onClick={openEditProfile}>
-                                                            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"><Edit2 size={14} className="text-gold" /></div>
-                                                            <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1">Client Profile</p>
-                                                            <div className="flex items-center gap-2"><Users size={16} className="text-gold" /><span className="text-xl font-display font-bold text-white truncate max-w-[120px]">Edit Details</span></div>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })()}
+                                            <div className="grid grid-cols-3 gap-6 mb-8">
+                                                <div className="bg-zinc-950 border border-white/5 rounded-3xl p-6 flex flex-col justify-center relative overflow-hidden"><p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1">Total Artist Spend</p><div className="flex items-center gap-2"><DollarSign size={16} className="text-gold" /><span className="text-2xl font-display font-black text-white">${totalInvested.toLocaleString()}</span></div></div>
+                                                <div className="bg-zinc-950 border border-white/5 rounded-3xl p-6 flex flex-col justify-center relative overflow-hidden"><p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1">Audio Engagement</p><div className="flex items-center gap-2"><Eye size={16} className="text-gold" /><span className="text-2xl font-display font-black text-white">{(selectedArtist.bounces || []).length} Tracks</span></div></div>
+                                                <div className="bg-zinc-950 border border-white/5 rounded-3xl p-6 flex flex-col justify-center relative overflow-hidden group cursor-pointer hover:border-gold/30 transition-all" onClick={openEditProfile}>
+                                                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"><Edit2 size={14} className="text-gold" /></div>
+                                                    <p className="text-[9px] font-black text-zinc-600 uppercase tracking-widest mb-1">Client Profile</p>
+                                                    <div className="flex items-center gap-2"><Users size={16} className="text-gold" /><span className="text-xl font-display font-bold text-white truncate max-w-[120px]">Edit Details</span></div>
+                                                </div>
+                                            </div>
 
                                             <div className="flex gap-4 mb-6 border-b border-white/5">
                                                 <button onClick={() => setActiveTab('bookings')} className={`pb-4 px-2 font-bold uppercase tracking-widest text-xs transition-all ${activeTab === 'bookings' ? 'text-gold border-gold border-b-2' : 'text-gray-500 hover:text-white'}`}>Bookings & Payments</button>

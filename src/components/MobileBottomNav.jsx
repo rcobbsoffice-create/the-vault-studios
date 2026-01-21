@@ -1,13 +1,15 @@
-import React from 'react';
-import { Calendar, Headphones, User, Home } from 'lucide-react';
+import { Calendar, Headphones, User, Home, Music, FileText } from 'lucide-react';
+import { useAuth } from '../core/AuthContext';
 
 const MobileBottomNav = ({ activeTab, setActiveTab }) => {
+    const { isProducer } = useAuth();
+
     const navItems = [
-        { id: 'dashboard', label: 'Home', icon: Home }, // Optional "Overview" tab if we have one, otherwise maybe just map to Bookings? 
-        // Actually Dashboard.jsx logic seems to use tabs: 'bookings', 'bounces', 'profile'. 
-        // Let's stick to those.
         { id: 'bookings', label: 'Sessions', icon: Calendar },
-        { id: 'bounces', label: 'Bounces', icon: Headphones },
+        { id: 'notes', label: 'Lyrics', icon: FileText },
+        isProducer
+            ? { id: 'myBeats', label: 'Catalog', icon: Music }
+            : { id: 'licensedBeats', label: 'Beats', icon: Music },
         { id: 'profile', label: 'Profile', icon: User },
     ];
 
@@ -23,8 +25,8 @@ const MobileBottomNav = ({ activeTab, setActiveTab }) => {
                             key={item.id}
                             onClick={() => setActiveTab(item.id)}
                             className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all w-16 ${isActive
-                                    ? 'bg-zinc-800 text-gold shadow-lg shadow-black/50 scale-105'
-                                    : 'text-zinc-500 hover:text-zinc-300'
+                                ? 'bg-zinc-800 text-gold shadow-lg shadow-black/50 scale-105'
+                                : 'text-zinc-500 hover:text-zinc-300'
                                 }`}
                         >
                             <Icon size={20} strokeWidth={isActive ? 3 : 2} />

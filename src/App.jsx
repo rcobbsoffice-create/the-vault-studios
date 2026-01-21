@@ -9,6 +9,7 @@ import Studios from './pages/Studios';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import Beats from './pages/Beats';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -45,6 +46,7 @@ function App() {
             <Route path="/studios" element={<Studios />} />
 
             <Route path="/book" element={<Book />} />
+            <Route path="/beats" element={<Beats />} />
             <Route path="/login" element={<Login />} />
             <Route
               path="/dashboard"

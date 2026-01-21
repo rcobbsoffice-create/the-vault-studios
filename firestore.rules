@@ -38,6 +38,27 @@ service cloud.firestore {
       allow create: if isSignedIn();
       allow update, delete: if isSignedIn() && (isOwner(resource.data.userId) || isAdmin());
     }
+
+    // Session Notes Collection
+    match /notes/{bookingId} {
+      // 1. Admin can read/write all.
+      // 2. User can read/write their own notes.
+      allow read: if isSignedIn() && (
+        isAdmin() || 
+        (resource != null && resource.data.clientId == request.auth.uid)
+      );
+      allow write: if isSignedIn() && (
+        isAdmin() || 
+        (request.resource.data.clientId == request.auth.uid)
+      );
+    }
+    
+    // Beats Collection
+    match /beats/{beatId} {
+      allow read: if true; // Marketplace is public
+      allow create: if isSignedIn(); // Any registered user can upload (could be restricted to PRODUCER role)
+      allow update, delete: if isSignedIn() && (resource.data.producerId == request.auth.uid || isAdmin());
+    }
     
     // Debug helper - fallback
     match /{document=**} {

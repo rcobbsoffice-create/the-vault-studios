@@ -10,5 +10,20 @@
                 "firebase-debug.*.log"
             ]
         }
-    ]
+    ],
+    "firestore": {
+        "rules": "firestore.rules"
+    },
+    "storage": {
+        "rules": "storage.rules"
+    },
+    "emulators": {
+        "functions": {
+            "port": 5007
+        },
+        "ui": {
+            "enabled": true,
+            "port": 4444
+        }
+    }
 }

@@ -1,14 +1,19 @@
 {
     "name": "functions",
     "description": "Cloud Functions for The Vault Studios",
+    "engines": {
+        "node": "20"
+    },
     "scripts": {
-        "serve": "firebase emulators:start --only functions",
+        "serve": "FIREBASE_CLI_SKIP_SDK_UPDATE_CHECK=true firebase emulators:start --only functions --config ../firebase.json",
         "shell": "firebase functions:shell",
         "start": "npm run shell",
         "deploy": "firebase deploy --only functions",
         "logs": "firebase functions:log",
         "lint": "echo 'No linting needed'",
         "dev": "functions-framework --target=processSpeech --port=5001",
+        "dev:incoming": "functions-framework --target=incomingCall --port=5005",
+        "dev:voice": "functions-framework --target=incomingCall --port=5001",
         "dev:email": "functions-framework --target=sendEmailDev --port=5002",
         "dev:webhook": "functions-framework --target=stripeWebhook --port=5003"
     },
@@ -16,8 +21,9 @@
     "dependencies": {
         "cors": "^2.8.5",
         "dotenv": "^17.2.3",
-        "firebase-admin": "^11.8.0",
-        "firebase-functions": "^4.3.1",
+        "express": "^4.22.1",
+        "firebase-admin": "^12.0.0",
+        "firebase-functions": "^6.1.1",
         "nodemailer": "^6.9.13",
         "openai": "^6.16.0",
         "stripe": "^20.1.2",

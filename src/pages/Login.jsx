@@ -11,7 +11,7 @@ const Login = () => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [socialLoading, setSocialLoading] = useState(null);
-    const [rememberMe, setRememberMe] = useState(false);
+    const [role, setRole] = useState('ARTIST');
     const navigate = useNavigate();
     const { login, signup, loginWithProvider } = useAuth();
 
@@ -24,7 +24,7 @@ const Login = () => {
         if (isLogin) {
             result = await login(email, password);
         } else {
-            result = await signup(email, password, name);
+            result = await signup(email, password, name, role);
         }
 
         if (result.success) {
@@ -63,18 +63,41 @@ const Login = () => {
 
                         {/* Name Field (Register Only) */}
                         {!isLogin && (
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-widest">
-                                    Artist / Band Name
-                                </label>
-                                <input
-                                    type="text"
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    required
-                                    className="w-full bg-black border border-white/10 rounded-xl px-4 py-3.5 text-white focus:border-gold focus:ring-1 focus:ring-gold/20 outline-none transition-all placeholder:text-zinc-700"
-                                    placeholder="The Vault Artist"
-                                />
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-widest">
+                                        Account Type
+                                    </label>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <button
+                                            type="button"
+                                            onClick={() => setRole('ARTIST')}
+                                            className={`py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all border ${role === 'ARTIST' ? 'bg-gold text-black border-gold' : 'bg-black text-zinc-500 border-white/10 hover:border-white/20'}`}
+                                        >
+                                            Artist
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setRole('PRODUCER')}
+                                            className={`py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-all border ${role === 'PRODUCER' ? 'bg-gold text-black border-gold' : 'bg-black text-zinc-500 border-white/10 hover:border-white/20'}`}
+                                        >
+                                            Producer
+                                        </button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-widest">
+                                        {role === 'PRODUCER' ? 'Producer / Studio Name' : 'Artist / Band Name'}
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                        required
+                                        className="w-full bg-black border border-white/10 rounded-xl px-4 py-3.5 text-white focus:border-gold focus:ring-1 focus:ring-gold/20 outline-none transition-all placeholder:text-zinc-700"
+                                        placeholder={role === 'PRODUCER' ? "The Vault Producer" : "The Vault Artist"}
+                                    />
+                                </div>
                             </div>
                         )}
 
