@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { doc, getDoc, setDoc, updateDoc, arrayUnion, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Save, FileText, Music, Mic, Clock, CheckCircle } from 'lucide-react';
+import { Save, FileText, Music, Mic, Clock, CheckCircle, Heart, Sparkles, Send, Copy, X } from 'lucide-react';
 
-const SessionNotes = ({ bookings, user, licensedBeats }) => {
-    const [selectedId, setSelectedId] = useState(bookings?.[0]?.id || licensedBeats?.[0]?.id || null);
-    const [selectedType, setSelectedType] = useState(bookings?.[0] ? 'booking' : 'beat');
+const SessionNotes = ({ bookings, user, licensedBeats, favoriteBeats }) => {
+    const [selectedId, setSelectedId] = useState(bookings?.[0]?.id || licensedBeats?.[0]?.id || favoriteBeats?.[0]?.id || null);
+    const [selectedType, setSelectedType] = useState(bookings?.[0] ? 'booking' : (licensedBeats?.[0] ? 'beat' : (favoriteBeats?.[0] ? 'favorite' : null)));
     const [noteType, setNoteType] = useState('lyrics'); // 'lyrics' or 'technical'
     const [content, setContent] = useState('');
     const [saving, setSaving] = useState(false);
     const [lastSaved, setLastSaved] = useState(null);
+    const [showAI, setShowAI] = useState(false);
+    const [aiPrompt, setAiPrompt] = useState('');
+    const [aiMode, setAiMode] = useState('verse'); // 'verse', 'hook', 'rhymes', 'continue'
+    const [aiLoading, setAiLoading] = useState(false);
+    const [aiResult, setAiResult] = useState('');
 
     // Sort bookings by date (newest first)
     const sortedBookings = [...(bookings || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -69,6 +74,40 @@ const SessionNotes = ({ bookings, user, licensedBeats }) => {
             alert("Failed to save note");
         }
         setSaving(false);
+    };
+
+    const handleAIWriter = async () => {
+        if (!aiPrompt && aiMode !== 'continue') return;
+        setAiLoading(true);
+        setAiResult('');
+
+        const isLocal = window.location.hostname === 'localhost';
+        const functionUrl = isLocal
+            ? 'http://localhost:5001/print-lab-studios/us-central1/aiWriter'
+            : 'https://us-central1-print-lab-studios.cloudfunctions.net/aiWriter';
+
+        try {
+            const response = await fetch(functionUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    prompt: aiPrompt,
+                    mode: aiMode,
+                    currentLyrics: content,
+                    context: selectedType === 'beat' || selectedType === 'favorite' ? selectedId : ''
+                })
+            });
+            const data = await response.json();
+            if (data.success) {
+                setAiResult(data.result);
+            } else {
+                alert("AI Generation failed: " + data.error);
+            }
+        } catch (error) {
+            console.error("AI Writer Error:", error);
+            alert("Failed to connect to AI Writer");
+        }
+        setAiLoading(false);
     };
 
     const selectedBooking = sortedBookings.find(b => b.id === selectedBookingId);
@@ -138,6 +177,27 @@ const SessionNotes = ({ bookings, user, licensedBeats }) => {
                         ))}
                     </>
                 )}
+
+                {favoriteBeats?.length > 0 && (
+                    <>
+                        <div className="p-4 border-b border-white/5 bg-zinc-950/20">
+                            <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Favorite Beats</h3>
+                        </div>
+                        {favoriteBeats.map(beat => (
+                            <button
+                                key={beat.id}
+                                onClick={() => { setSelectedId(beat.id); setSelectedType('favorite'); }}
+                                className={`w-full text-left p-4 border-b border-white/5 transition-colors hover:bg-white/5 ${selectedId === beat.id ? 'bg-gold/10 border-l-4 border-l-gold' : 'border-l-4 border-l-transparent'}`}
+                            >
+                                <div className="font-bold text-white text-sm mb-1 truncate">{beat.title}</div>
+                                <div className="flex items-center gap-2 text-xs text-zinc-500">
+                                    <Heart size={12} className="text-gold" />
+                                    <span>{beat.genre}</span>
+                                </div>
+                            </button>
+                        ))}
+                    </>
+                )}
             </div>
 
             {/* Main Editor Area */}
@@ -166,6 +226,12 @@ const SessionNotes = ({ bookings, user, licensedBeats }) => {
                             </span>
                         )}
                         <button
+                            onClick={() => setShowAI(!showAI)}
+                            className={`p-2 rounded-lg transition-all ${showAI ? 'bg-gold text-black' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}
+                        >
+                            <Sparkles size={18} />
+                        </button>
+                        <button
                             onClick={handleSave}
                             disabled={saving}
                             className="bg-gold text-black px-4 py-2 rounded-lg font-bold text-xs uppercase hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
@@ -176,13 +242,89 @@ const SessionNotes = ({ bookings, user, licensedBeats }) => {
                     </div>
                 </div>
 
-                {/* Text Area */}
-                <textarea
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    placeholder={noteType === 'lyrics' ? "Write your lyrics here..." : "Microphone positions, preamp settings, outboard gear used..."}
-                    className="flex-1 bg-transparent p-6 text-white font-mono text-sm resize-none focus:outline-none leading-relaxed placeholder:text-zinc-700"
-                />
+                <div className="flex-1 flex flex-row relative overflow-hidden">
+                    {/* Text Area */}
+                    <textarea
+                        value={content}
+                        onChange={(e) => setContent(e.target.value)}
+                        placeholder={noteType === 'lyrics' ? "Write your lyrics here..." : "Microphone positions, preamp settings, outboard gear used..."}
+                        className="flex-1 bg-transparent p-6 text-white font-mono text-sm resize-none focus:outline-none leading-relaxed placeholder:text-zinc-700"
+                    />
+
+                    {/* AI Writer Panel */}
+                    {showAI && (
+                        <div className="w-80 bg-zinc-950 border-l border-white/5 flex flex-col animate-in slide-in-from-right duration-300">
+                            <div className="p-4 border-b border-white/5 flex justify-between items-center bg-zinc-900/50">
+                                <h4 className="text-xs font-black uppercase tracking-widest text-gold flex items-center gap-2">
+                                    <Sparkles size={14} /> AI Writer
+                                </h4>
+                                <button onClick={() => setShowAI(false)} className="text-zinc-500 hover:text-white">
+                                    <X size={16} />
+                                </button>
+                            </div>
+
+                            <div className="p-4 space-y-4 overflow-y-auto flex-1">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Generate Mode</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {['verse', 'hook', 'rhymes', 'continue'].map(mode => (
+                                            <button
+                                                key={mode}
+                                                onClick={() => setAiMode(mode)}
+                                                className={`py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${aiMode === mode ? 'bg-gold text-black' : 'bg-zinc-900 text-zinc-500 border border-white/5 hover:border-white/10'}`}
+                                            >
+                                                {mode}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {aiMode !== 'continue' && (
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                                            {aiMode === 'rhymes' ? 'Rhyme words' : 'What is it about?'}
+                                        </label>
+                                        <textarea
+                                            value={aiPrompt}
+                                            onChange={(e) => setAiPrompt(e.target.value)}
+                                            placeholder={aiMode === 'rhymes' ? "e.g. Norfolk, night, cold" : "e.g. Growing up in the city, finding success..."}
+                                            className="w-full bg-zinc-900 border border-white/5 rounded-xl p-3 text-xs text-white focus:border-gold outline-none h-24 resize-none"
+                                        />
+                                    </div>
+                                )}
+
+                                <button
+                                    onClick={handleAIWriter}
+                                    disabled={aiLoading}
+                                    className="w-full bg-zinc-800 hover:bg-zinc-700 text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                                >
+                                    {aiLoading ? <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div> : <Send size={14} />}
+                                    {aiMode === 'continue' ? 'Continue Lyrics' : 'Generate Idea'}
+                                </button>
+
+                                {aiResult && (
+                                    <div className="space-y-2 mt-6 animate-in fade-in slide-in-from-bottom-2">
+                                        <div className="flex justify-between items-center">
+                                            <label className="text-[10px] font-bold text-gold uppercase tracking-widest">AI Result</label>
+                                            <button
+                                                onClick={() => {
+                                                    setContent(prev => prev + (prev ? '\n\n' : '') + aiResult);
+                                                    setAiResult('');
+                                                }}
+                                                className="text-[10px] font-bold text-zinc-400 hover:text-white flex items-center gap-1"
+                                            >
+                                                <Copy size={12} /> Add to Editor
+                                            </button>
+                                        </div>
+                                        <div className="bg-black/50 border border-white/10 rounded-xl p-4 text-xs text-zinc-300 leading-relaxed font-mono whitespace-pre-wrap">
+                                            {aiResult}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

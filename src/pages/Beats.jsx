@@ -6,7 +6,7 @@ import BeatCard from '../components/BeatCard';
 import { Search, Filter, Music, Play, Pause } from 'lucide-react';
 
 const Beats = () => {
-    const { user, licenseBeat } = useAuth();
+    const { user, licenseBeat, toggleFavoriteBeat } = useAuth();
     const [beats, setBeats] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -44,15 +44,23 @@ const Beats = () => {
         }
     };
 
-    const handleLicense = async (beat) => {
+    const handleLicense = async (beat, tier, price) => {
         if (!user) {
             alert("Please login to license beats.");
             return;
         }
-        const success = await licenseBeat(user.uid, beat);
+        const success = await licenseBeat(user.uid, beat, tier, price);
         if (success) {
-            alert(`Beat "${beat.title}" licensed successfully!`);
+            alert(`Beat "${beat.title}" licensed successfully as ${tier}!`);
         }
+    };
+
+    const handleFavorite = async (beat) => {
+        if (!user) {
+            alert("Please login to favorite beats.");
+            return;
+        }
+        await toggleFavoriteBeat(user.uid, beat);
     };
 
     const filteredBeats = beats.filter(beat => {
@@ -63,6 +71,10 @@ const Beats = () => {
 
     const isLicensed = (beatId) => {
         return user?.licensedBeats?.some(lb => lb.id === beatId);
+    };
+
+    const isFavorited = (beatId) => {
+        return user?.favoriteBeats?.some(f => f.id === beatId);
     };
 
     return (
@@ -125,6 +137,8 @@ const Beats = () => {
                                 onPlay={handlePlay}
                                 onLicense={handleLicense}
                                 isLicensed={isLicensed(beat.id)}
+                                onToggleFavorite={handleFavorite}
+                                isFavorited={isFavorited(beat.id)}
                             />
                         ))}
                     </div>

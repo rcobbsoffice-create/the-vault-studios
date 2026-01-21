@@ -46,7 +46,8 @@ service cloud.firestore {
       // 2. User can read/write their own notes.
       allow read: if isSignedIn() && (
         isAdmin() || 
-        (resource != null && resource.data.clientId == request.auth.uid)
+        resource == null ||
+        resource.data.clientId == request.auth.uid
       );
       allow write: if isSignedIn() && (
         isAdmin() || 

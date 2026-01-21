@@ -54,3 +54,7 @@ exports.sendEmailDev = sendEmailDev;
 const { createPaymentIntent, stripeWebhook } = require('./stripe');
 exports.createPaymentIntent = createPaymentIntent;
 exports.stripeWebhook = stripeWebhook;
+
+// Import and re-export AI functions
+const { aiWriter } = require('./ai');
+exports.aiWriter = aiWriter;

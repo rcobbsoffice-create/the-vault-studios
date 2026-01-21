@@ -20,7 +20,8 @@ import {
     serverTimestamp,
     updateDoc,
     deleteDoc,
-    arrayUnion
+    arrayUnion,
+    arrayRemove
 } from 'firebase/firestore';
 import {
     ref,
@@ -505,13 +506,68 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    const licenseBeat = async (userId, beat) => {
+    const updateBeat = async (beatId, metadata) => {
+        try {
+            const beatRef = doc(db, "beats", beatId);
+            await updateDoc(beatRef, metadata);
+            return { success: true };
+        } catch (error) {
+            console.error("Beat Update error:", error);
+            return { success: false, error: error.message };
+        }
+    };
+
+    const deleteBeat = async (producerId, beatId) => {
+        try {
+            // 1. Delete from beats collection
+            await deleteDoc(doc(db, "beats", beatId));
+
+            // 2. Remove from producer's beats array
+            const userRef = doc(db, "users", producerId);
+            await updateDoc(userRef, {
+                beats: arrayRemove(beatId)
+            });
+
+            return { success: true };
+        } catch (error) {
+            console.error("Beat Delete error:", error);
+            return { success: false, error: error.message };
+        }
+    };
+
+    const toggleFavoriteBeat = async (userId, beat) => {
+        try {
+            const userRef = doc(db, "users", userId);
+            const isAlreadyFavorite = (user.favoriteBeats || []).some(f => f.id === beat.id);
+
+            if (isAlreadyFavorite) {
+                await updateDoc(userRef, {
+                    favoriteBeats: arrayRemove(beat)
+                });
+            } else {
+                await updateDoc(userRef, {
+                    favoriteBeats: arrayUnion({
+                        ...beat,
+                        favoritedAt: new Date().toISOString()
+                    })
+                });
+            }
+            return { success: true };
+        } catch (error) {
+            console.error("Toggle Favorite error:", error);
+            return { success: false, error: error.message };
+        }
+    };
+
+    const licenseBeat = async (userId, beat, tier, price) => {
         try {
             // In a real app, this would happen after Stripe payment
             const userRef = doc(db, "users", userId);
 
             const licenseInfo = {
                 ...beat,
+                licenseTier: tier,
+                licensePrice: price,
                 licensedAt: new Date().toISOString(),
                 transactionId: `TXN_${Date.now()}`
             };
@@ -568,6 +624,9 @@ export const AuthProvider = ({ children }) => {
         updateUserPreferences,
         sendSMS,
         uploadBeat,
+        updateBeat,
+        deleteBeat,
+        toggleFavoriteBeat,
         licenseBeat,
         isAuthenticated: !!user,
         isAdmin: user?.email?.includes('admin') || user?.role === 'ADMIN',
