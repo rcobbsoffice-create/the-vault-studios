@@ -15,7 +15,8 @@
         "dev:incoming": "functions-framework --target=incomingCall --port=5005",
         "dev:voice": "functions-framework --target=incomingCall --port=5001",
         "dev:email": "functions-framework --target=sendEmailDev --port=5002",
-        "dev:webhook": "functions-framework --target=stripeWebhook --port=5003"
+        "dev:webhook": "functions-framework --target=stripeWebhook --port=5003",
+        "dev:ai": "functions-framework --target=aiWriter --port=5008"
     },
     "main": "index.js",
     "dependencies": {

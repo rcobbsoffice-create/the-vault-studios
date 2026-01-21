@@ -31,7 +31,7 @@ const Navbar = () => {
                 <div className="hidden md:flex items-center space-x-8">
                     <Link to="/" className="text-gray-300 hover:text-white transition-colors text-sm uppercase tracking-widest">Home</Link>
                     <Link to="/studios" className="text-gray-300 hover:text-white transition-colors text-sm uppercase tracking-widest">Studios</Link>
-                    <Link to="/beats" className="text-gray-300 hover:text-white transition-colors text-sm uppercase tracking-widest">Beats</Link>
+                    <Link to="/beats" className="text-gray-300 hover:text-white transition-colors text-sm uppercase tracking-widest">Marketplace</Link>
 
 
                     {isAuthenticated ? (
@@ -85,7 +85,7 @@ const Navbar = () => {
                 <div className="md:hidden absolute top-20 left-0 w-full bg-black/95 border-b border-white/10 p-6 flex flex-col space-y-4 shadow-2xl">
                     <Link to="/" onClick={() => setIsOpen(false)} className="text-xl font-display uppercase">Home</Link>
                     <Link to="/studios" onClick={() => setIsOpen(false)} className="text-xl font-display uppercase">Studios</Link>
-                    <Link to="/beats" onClick={() => setIsOpen(false)} className="text-xl font-display uppercase">Beats</Link>
+                    <Link to="/beats" onClick={() => setIsOpen(false)} className="text-xl font-display uppercase">Marketplace</Link>
 
 
                     {isAuthenticated ? (

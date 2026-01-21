@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { auth, db, googleProvider } from '../firebase';
+import { auth, db, googleProvider, facebookProvider, appleProvider } from '../firebase';
 import {
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
@@ -239,8 +239,12 @@ export const AuthProvider = ({ children }) => {
             let userCredential;
             if (providerName === 'google') {
                 userCredential = await signInWithPopup(auth, googleProvider);
+            } else if (providerName === 'facebook') {
+                userCredential = await signInWithPopup(auth, facebookProvider);
+            } else if (providerName === 'apple') {
+                userCredential = await signInWithPopup(auth, appleProvider);
             } else {
-                return { success: false, error: "Only Google login is supported right now." };
+                return { success: false, error: "Unsupported provider." };
             }
 
             const newUser = userCredential.user;

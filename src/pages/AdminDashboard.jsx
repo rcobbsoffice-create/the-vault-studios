@@ -32,7 +32,7 @@ import { functions } from '../firebase';
 import { httpsCallable } from 'firebase/functions';
 
 const AdminDashboard = () => {
-    const { allUsers, allBookings, allBeats, updateArtistBounces, updateArtistBooking, deleteArtistBooking, addArtist, deleteArtist, uploadBounce, updateUserProfile } = useAuth();
+    const { user, allUsers, allBookings, allBeats, updateArtistBounces, updateArtistBooking, deleteArtistBooking, addArtist, deleteArtist, uploadBeat, deleteBeat, uploadBounce, updateUserProfile } = useAuth();
 
     // View State
     const [currentView, setCurrentView] = useState('dashboard'); // 'dashboard', 'calendar', 'clients', 'beats', 'payments', 'marketing', 'voice'
@@ -58,6 +58,22 @@ const AdminDashboard = () => {
     // Audio Preview State
     const [previewPlayingId, setPreviewPlayingId] = useState(null);
     const audioPreviewRef = React.useRef(new Audio());
+
+    // NEW: Beat Upload State
+    const [isAddingBeat, setIsAddingBeat] = useState(false);
+    const [aiProcessing, setAiProcessing] = useState(false);
+    const [isScanning, setIsScanning] = useState(false); // Sonic Scan Effect
+    const [isListening, setIsListening] = useState(false); // Voice Input
+    const [beatDescription, setBeatDescription] = useState('');
+    const [beatForm, setBeatForm] = useState({
+        title: '',
+        genre: 'Hip Hop',
+        bpm: '',
+        songKey: '',
+        price: '29.99',
+        previewFile: null,
+        stemsFile: null
+    });
 
     // Forms
     const [paymentForm, setPaymentForm] = useState({
@@ -354,6 +370,166 @@ const AdminDashboard = () => {
         setEditingBounceId(null);
         setEditBounceForm(null);
         alert("✅ Bounce details updated!");
+    };
+
+    // NEW: Beat Management Handlers
+    const handleSuggestMetadata = async (overrideDescription) => {
+        const description = overrideDescription || beatDescription;
+        if (!description) return;
+
+        setAiProcessing(true);
+        setIsScanning(true);
+
+        try {
+            console.log("Starting Sonic Analysis for:", description);
+            // Simulated sonic processing delay
+            await new Promise(r => setTimeout(r, 2500));
+
+            const DEV_AI_URL = 'http://localhost:5008';
+
+            const response = await fetch(DEV_AI_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    prompt: description,
+                    mode: 'suggestBeatMetadata'
+                })
+            });
+
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`Server responded with ${response.status}: ${errText}`);
+            }
+
+            const data = await response.json();
+            console.log("AI Response Received:", data);
+
+            if (data.success) {
+                let jsonStr = data.result;
+                console.log("Raw AI Result String:", jsonStr);
+
+                // Robust JSON extraction (finds the first { and last })
+                const startIdx = jsonStr.indexOf('{');
+                const endIdx = jsonStr.lastIndexOf('}');
+
+                if (startIdx !== -1 && endIdx !== -1) {
+                    jsonStr = jsonStr.substring(startIdx, endIdx + 1);
+                } else {
+                    console.warn("Could not find JSON brackets in response, attempting to parse raw string.");
+                }
+
+                try {
+                    const metadataRaw = JSON.parse(jsonStr);
+                    // Normalize keys (case-insensitive)
+                    const metadata = {};
+                    Object.keys(metadataRaw).forEach(k => {
+                        metadata[k.toLowerCase()] = metadataRaw[k];
+                    });
+
+                    setBeatForm(prev => ({
+                        ...prev,
+                        title: metadata.title || prev.title,
+                        bpm: metadata.bpm || prev.bpm,
+                        songKey: metadata.key || metadata.songkey || metadata.song_key || prev.songKey
+                    }));
+                    console.log("Metadata applied:", metadata);
+                    alert("✨ Sonic Analysis Complete: Metadata applied!");
+                } catch (parseErr) {
+                    console.error("JSON Parse Error:", parseErr, "Raw string:", jsonStr);
+                    alert("⚠️ Sonic Scan Partial Success: AI replied but data format was invalid. Check console.");
+                }
+            } else {
+                throw new Error(data.error || "AI failed to respond");
+            }
+        } catch (error) {
+            console.error("Auto-Analysis Error:", error);
+            alert(`❌ Sonic Scan Failed: ${error.message}`);
+        } finally {
+            setAiProcessing(false);
+            setIsScanning(false);
+        }
+    };
+
+    const handleBeatFileChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        setBeatForm({ ...beatForm, previewFile: file });
+
+        // AUTOMATIC ANALYSIS: "Figure it out and load it"
+        // We use the filename as the initial seed for the "Perfect Ear" AI
+        const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
+        setBeatDescription(`Analyzing file content: ${cleanName}`);
+        handleSuggestMetadata(`Sonic analysis of the file named "${cleanName}". Determine the most likely creative title, BPM, and Key based on this producer's style.`);
+    };
+
+    const toggleVoiceInput = () => {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert("Speech recognition is not supported in this browser.");
+            return;
+        }
+
+        if (isListening) {
+            setIsListening(false);
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        recognition.onstart = () => setIsListening(true);
+        recognition.onend = () => setIsListening(false);
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            setBeatDescription(prev => (prev ? `${prev} ${transcript}` : transcript));
+        };
+
+        recognition.start();
+    };
+
+    const handleAddBeat = async (e) => {
+        e.preventDefault();
+        if (!beatForm.previewFile) {
+            alert("Please select a preview file.");
+            return;
+        }
+
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerText;
+        submitBtn.innerText = "UPLOADING...";
+        submitBtn.disabled = true;
+
+
+        const result = await uploadBeat(user.uid, beatForm.previewFile, beatForm.stemsFile, {
+            title: beatForm.title,
+            genre: beatForm.genre,
+            bpm: beatForm.bpm,
+            songKey: beatForm.songKey,
+            price: beatForm.price
+        });
+
+        if (result.success) {
+            alert("✅ Beat uploaded & added to catalog!");
+            setIsAddingBeat(false);
+            setBeatDescription('');
+            setBeatForm({
+                title: '',
+                genre: 'Hip Hop',
+                bpm: '',
+                songKey: '',
+                price: '29.99',
+                previewFile: null,
+                stemsFile: null
+            });
+        } else {
+            alert("❌ Upload failed: " + result.error);
+        }
+
+        submitBtn.innerText = originalText;
+        submitBtn.disabled = false;
     };
 
     const togglePreview = (bounce) => {
@@ -1075,7 +1251,130 @@ const AdminDashboard = () => {
                                             <h3 className="font-display text-4xl font-black text-white uppercase tracking-tighter">Global <span className="text-gold">Beat Catalog</span></h3>
                                             <p className="text-zinc-500 font-bold uppercase tracking-widest text-[10px] mt-2">{allBeats.length} total tracks across {Object.keys(beatsByProducer).length} producers</p>
                                         </div>
+                                        <button
+                                            onClick={() => setIsAddingBeat(!isAddingBeat)}
+                                            className="bg-gold text-black px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-white transition-all shadow-lg shadow-gold/10"
+                                        >
+                                            {isAddingBeat ? 'Cancel Upload' : 'Upload New Beat'}
+                                        </button>
                                     </div>
+
+                                    {/* NEW: Beat Upload Form */}
+                                    {isAddingBeat && (
+                                        <div className="mb-16 bg-zinc-900/50 border border-gold/20 rounded-[2rem] p-8 animate-in slide-in-from-top duration-500">
+                                            <form onSubmit={handleAddBeat} className="space-y-8">
+                                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                                                    {/* AI Assistant Section */}
+                                                    <div className="space-y-4">
+                                                        <div className="flex justify-between items-center">
+                                                            <h4 className="text-gold font-black uppercase tracking-widest text-xs flex items-center gap-2">
+                                                                <div className={`w-1.5 h-1.5 rounded-full bg-gold ${aiProcessing ? 'animate-ping' : ''}`}></div>
+                                                                AI Metadata Assistant
+                                                            </h4>
+                                                            {isScanning && (
+                                                                <span className="text-[10px] font-black text-gold animate-pulse tracking-widest uppercase">Sonic Scan in Progress...</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="bg-black/40 border border-white/5 rounded-2xl p-6 space-y-4 relative overflow-hidden group">
+                                                            {isScanning && (
+                                                                <div className="absolute inset-x-0 top-0 h-[2px] bg-gold/50 shadow-[0_0_15px_rgba(212,175,55,0.5)] animate-scan z-20"></div>
+                                                            )}
+                                                            <div className="relative">
+                                                                <textarea
+                                                                    placeholder="Describe the vibe... or click the mic to talk."
+                                                                    value={beatDescription}
+                                                                    onChange={(e) => setBeatDescription(e.target.value)}
+                                                                    className="w-full bg-transparent text-white text-sm font-medium h-24 outline-none resize-none placeholder:text-zinc-700 pr-10"
+                                                                ></textarea>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={toggleVoiceInput}
+                                                                    className={`absolute right-0 top-0 p-2 rounded-lg transition-all ${isListening ? 'bg-red-500 text-white animate-pulse' : 'text-zinc-500 hover:text-gold'}`}
+                                                                >
+                                                                    <Mic size={18} />
+                                                                </button>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleSuggestMetadata()}
+                                                                disabled={aiProcessing || !beatDescription}
+                                                                className="w-full bg-zinc-800 hover:bg-zinc-700 text-gold py-4 rounded-xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center gap-2 disabled:opacity-50 relative z-10"
+                                                            >
+                                                                {aiProcessing ? (
+                                                                    <>
+                                                                        <div className="w-3 h-3 border-2 border-gold/30 border-t-gold rounded-full animate-spin"></div>
+                                                                        Analyzing Frequency...
+                                                                    </>
+                                                                ) : (
+                                                                    'Analyze Sonic Vibe'
+                                                                )}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Fields Section */}
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div className="col-span-2">
+                                                            <label className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1.5">Track Title</label>
+                                                            <input required type="text" value={beatForm.title} onChange={e => setBeatForm({ ...beatForm, title: e.target.value })} className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold focus:border-gold outline-none" placeholder="Enter title..." />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1.5">Genre</label>
+                                                            <select value={beatForm.genre} onChange={e => setBeatForm({ ...beatForm, genre: e.target.value })} className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold focus:border-gold outline-none">
+                                                                <option>Hip Hop</option>
+                                                                <option>Trap</option>
+                                                                <option>R&B</option>
+                                                                <option>Pop</option>
+                                                                <option>Drill</option>
+                                                            </select>
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1.5">BPM</label>
+                                                            <input type="number" value={beatForm.bpm} onChange={e => setBeatForm({ ...beatForm, bpm: e.target.value })} className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold focus:border-gold outline-none" placeholder="e.g. 140" />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1.5">Key</label>
+                                                            <input type="text" value={beatForm.songKey} onChange={e => setBeatForm({ ...beatForm, songKey: e.target.value })} className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold focus:border-gold outline-none" placeholder="e.g. C Minor" />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-1.5">Base Price ($)</label>
+                                                            <input type="text" value={beatForm.price} onChange={e => setBeatForm({ ...beatForm, price: e.target.value })} className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-white text-sm font-bold focus:border-gold outline-none" placeholder="29.99" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    <div className="bg-black/50 border border-dashed border-white/10 rounded-2xl p-6 text-center group hover:border-gold/30 transition-all relative overflow-hidden">
+                                                        {isScanning && (
+                                                            <div className="absolute inset-0 bg-gold/5 animate-pulse z-0"></div>
+                                                        )}
+                                                        <input required type="file" accept="audio/*" onChange={handleBeatFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+                                                        <div className="relative z-10">
+                                                            <Music size={24} className={`mx-auto mb-2 ${isScanning ? 'text-gold animate-bounce' : 'text-zinc-700 group-hover:text-gold'} transition-all`} />
+                                                            <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest leading-relaxed">
+                                                                {beatForm.previewFile ? (
+                                                                    <span className="text-gold">{beatForm.previewFile.name} (Analyzing...)</span>
+                                                                ) : 'Drop Beat to Auto-Analyze'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="bg-black/50 border border-dashed border-white/10 rounded-2xl p-6 text-center group hover:border-gold/30 transition-all relative">
+                                                        <input type="file" accept=".zip,.rar,.wav" onChange={e => setBeatForm({ ...beatForm, stemsFile: e.target.files[0] })} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                                                        <Upload size={24} className="mx-auto mb-2 text-zinc-700 group-hover:text-gold transition-colors" />
+                                                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest leading-relaxed">
+                                                            {beatForm.stemsFile ? (
+                                                                <span className="text-gold">{beatForm.stemsFile.name}</span>
+                                                            ) : 'Upload Stems (Optional ZIP)'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <button type="submit" className="w-full bg-white text-black py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-gold transition-all shadow-xl active:scale-[0.98]">
+                                                    Publish to Marketplace
+                                                </button>
+                                            </form>
+                                        </div>
+                                    )}
 
                                     <div className="space-y-16">
                                         {Object.entries(beatsByProducer).map(([producer, beats]) => (
@@ -1121,7 +1420,7 @@ const AdminDashboard = () => {
                                                                     <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Preview Track</span>
                                                                 </div>
                                                                 <div className="text-right">
-                                                                    <p className="text-[10px] font-black text-white tracking-widest uppercase">$30-$500</p>
+                                                                    <p className="text-[10px] font-black text-white tracking-widest uppercase">${beat.price || '29.99'}</p>
                                                                     <p className="text-[8px] font-bold text-zinc-700 uppercase tracking-tighter">{new Date(beat.uploadedAt).toLocaleDateString()}</p>
                                                                 </div>
                                                             </div>

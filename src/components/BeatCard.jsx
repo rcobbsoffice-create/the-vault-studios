@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, Pause, ShoppingCart, Music, Download, CheckCircle, Heart } from 'lucide-react';
+import { Play, Pause, ShoppingCart, Music, Download, CheckCircle, Heart, Share2, Copy } from 'lucide-react';
 
 const BeatCard = ({ beat, onPlay, isPlaying, onLicense, isLicensed, onToggleFavorite, isFavorited }) => {
     const [selectedTier, setSelectedTier] = useState('Basic');
@@ -23,15 +23,28 @@ const BeatCard = ({ beat, onPlay, isPlaying, onLicense, isLicensed, onToggleFavo
                 <Music size={120} />
             </div>
 
-            <button
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleFavorite(beat);
-                }}
-                className={`absolute top-4 right-4 z-20 p-2 rounded-full transition-all ${isFavorited ? 'bg-gold text-black scale-110' : 'bg-black/40 text-zinc-500 hover:text-white hover:bg-black/60'}`}
-            >
-                <Heart size={16} fill={isFavorited ? "currentColor" : "none"} />
-            </button>
+            <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleFavorite(beat);
+                    }}
+                    className={`p-2 rounded-full transition-all ${isFavorited ? 'bg-gold text-black scale-110' : 'bg-black/40 text-zinc-500 hover:text-white hover:bg-black/60'}`}
+                >
+                    <Heart size={16} fill={isFavorited ? "currentColor" : "none"} />
+                </button>
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        const url = `${window.location.origin}/beats?id=${beat.id}`;
+                        navigator.clipboard.writeText(url);
+                        alert("Link copied to clipboard!");
+                    }}
+                    className="p-2 rounded-full bg-black/40 text-zinc-500 hover:text-white hover:bg-black/60 transition-all"
+                >
+                    <Share2 size={16} />
+                </button>
+            </div>
 
             <div className="flex flex-col gap-4 relative z-10">
                 <div className="flex items-center gap-4">
@@ -61,6 +74,12 @@ const BeatCard = ({ beat, onPlay, isPlaying, onLicense, isLicensed, onToggleFavo
                                 <>
                                     <span className="w-1 h-1 bg-zinc-700 rounded-full"></span>
                                     <span className="text-gold">{beat.songKey}</span>
+                                </>
+                            )}
+                            {beat.masteringLevel && (
+                                <>
+                                    <span className="w-1 h-1 bg-zinc-700 rounded-full"></span>
+                                    <span className="text-zinc-400">{beat.masteringLevel}</span>
                                 </>
                             )}
                         </div>

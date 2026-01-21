@@ -20,7 +20,10 @@ import {
     PanelLeft,
     FileText,
     Edit,
-    Sparkles
+    Sparkles,
+    LayoutGrid,
+    List,
+    Share2
 } from 'lucide-react';
 import AudioPlayer from '../components/AudioPlayer';
 import SessionNotes from '../components/SessionNotes';
@@ -53,6 +56,7 @@ const Dashboard = () => {
     const [beatFile, setBeatFile] = useState(null);
     const [stemsFile, setStemsFile] = useState(null);
     const [myBeats, setMyBeats] = useState([]);
+    const [viewMode, setViewMode] = useState('grid');
 
     useEffect(() => {
         if (!user || !isProducer) return;
@@ -74,6 +78,12 @@ const Dashboard = () => {
             addPaymentMethod(newCardForm);
             setNewCardForm({ brand: 'visa', last4: '', expiry: '' });
         }
+    };
+
+    const handleShareBeat = (beatId) => {
+        const url = `${window.location.origin}/beats?id=${beatId}`;
+        navigator.clipboard.writeText(url);
+        alert("Link copied to clipboard!");
     };
 
     return (
@@ -319,10 +329,26 @@ const Dashboard = () => {
                     {/* LICENSED BEATS TAB */}
                     {activeTab === 'licensedBeats' && !isProducer && (
                         <div className="animate-in fade-in duration-500">
-                            <h2 className="font-display text-2xl lg:text-3xl font-bold mb-6 flex items-center gap-3">
-                                <div className="w-1 h-8 bg-gold"></div>
-                                MY LICENSED BEATS
-                            </h2>
+                            <div className="flex justify-between items-center mb-6">
+                                <h2 className="font-display text-2xl lg:text-3xl font-bold flex items-center gap-3">
+                                    <div className="w-1 h-8 bg-gold"></div>
+                                    MY LICENSED BEATS
+                                </h2>
+                                <div className="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-white/10">
+                                    <button
+                                        onClick={() => setViewMode('grid')}
+                                        className={`p-2 rounded-md transition-all ${viewMode === 'grid' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-white'}`}
+                                    >
+                                        <LayoutGrid size={16} />
+                                    </button>
+                                    <button
+                                        onClick={() => setViewMode('list')}
+                                        className={`p-2 rounded-md transition-all ${viewMode === 'list' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-white'}`}
+                                    >
+                                        <List size={16} />
+                                    </button>
+                                </div>
+                            </div>
 
                             {(!user?.licensedBeats || user.licensedBeats.length === 0) ? (
                                 <div className="bg-zinc-900/50 border border-white/5 border-dashed rounded-3xl p-16 text-center">
@@ -331,28 +357,60 @@ const Dashboard = () => {
                                     <Link to="/beats" className="text-gold hover:underline mt-2 inline-block font-bold">Browse the Marketplace</Link>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-2"}>
                                     {user.licensedBeats.map((beat) => (
-                                        <div key={beat.id} className="bg-zinc-900 border border-white/5 p-6 rounded-2xl">
-                                            <div className="flex justify-between items-start mb-4">
+                                        <div key={beat.id} className={`bg-zinc-900 border border-white/5 p-4 rounded-2xl group ${viewMode === 'list' ? 'flex items-center justify-between gap-4' : ''}`}>
+                                            <div className={viewMode === 'list' ? "flex items-center gap-4 flex-1" : "flex justify-between items-start mb-4"}>
+                                                {viewMode === 'list' && (
+                                                    <div className="w-10 h-10 bg-zinc-800 rounded-lg flex items-center justify-center shrink-0 text-gold">
+                                                        <Music size={20} />
+                                                    </div>
+                                                )}
                                                 <div>
-                                                    <h3 className="font-bold text-lg text-white">{beat.title}</h3>
+                                                    <h3 className="font-bold text-white text-sm lg:text-base">{beat.title}</h3>
                                                     <div className="flex items-center gap-2 mt-1">
-                                                        <span className="text-xs text-zinc-500 uppercase tracking-widest font-bold">{beat.genre} • {beat.bpm} BPM</span>
+                                                        <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-bold">{beat.genre} • {beat.bpm} BPM</span>
                                                         <span className="w-1 h-1 bg-zinc-700 rounded-full"></span>
                                                         <span className="text-[10px] font-black text-gold uppercase tracking-tighter bg-gold/5 px-2 py-0.5 rounded border border-gold/10">{beat.licenseTier}</span>
                                                     </div>
                                                 </div>
-                                                <div className="bg-green-500/10 text-green-500 text-[10px] font-black px-2 py-1 rounded uppercase flex items-center gap-1 border border-green-500/20">
-                                                    <CheckCircle size={10} /> Licensed
-                                                </div>
+                                                {viewMode === 'grid' && (
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => handleShareBeat(beat.id)}
+                                                            className="text-zinc-600 hover:text-white transition-colors"
+                                                            title="Copy Share Link"
+                                                        >
+                                                            <Share2 size={16} />
+                                                        </button>
+                                                        <div className="bg-green-500/10 text-green-500 text-[10px] font-black px-2 py-1 rounded uppercase flex items-center gap-1 border border-green-500/20">
+                                                            <CheckCircle size={10} /> Licensed
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
-                                            <div className="flex gap-2">
-                                                <a href={beat.previewUrl} download className="flex-1 bg-white/5 hover:bg-white/10 text-white py-2 rounded-lg text-[10px] font-bold uppercase text-center transition-colors border border-white/5">2-Track (MP3)</a>
+
+                                            <div className={`flex gap-2 ${viewMode === 'list' ? 'shrink-0' : ''}`}>
+                                                {viewMode === 'list' && (
+                                                    <button
+                                                        onClick={() => handleShareBeat(beat.id)}
+                                                        className="p-2 text-zinc-600 hover:text-white transition-colors mr-2"
+                                                        title="Copy Share Link"
+                                                    >
+                                                        <Share2 size={16} />
+                                                    </button>
+                                                )}
+                                                <a href={beat.previewUrl} download className={`${viewMode === 'list' ? 'px-4 aspect-square flex items-center justify-center' : 'flex-1 py-2'} bg-white/5 hover:bg-white/10 text-white rounded-lg text-[10px] font-bold uppercase text-center transition-colors border border-white/5`}>
+                                                    {viewMode === 'list' ? 'MP3' : '2-Track (MP3)'}
+                                                </a>
                                                 {(beat.licenseTier === 'Premium' || beat.licenseTier === 'Unlimited') && beat.stemsUrl ? (
-                                                    <a href={beat.stemsUrl} download className="flex-1 bg-gold hover:bg-yellow-500 text-black py-2 rounded-lg text-[10px] font-black uppercase text-center transition-colors shadow-lg shadow-gold/10">Download Stems</a>
+                                                    <a href={beat.stemsUrl} download className={`${viewMode === 'list' ? 'px-4 aspect-square flex items-center justify-center' : 'flex-1 py-2'} bg-gold hover:bg-yellow-500 text-black rounded-lg text-[10px] font-black uppercase text-center transition-colors shadow-lg shadow-gold/10`}>
+                                                        {viewMode === 'list' ? 'ZIP' : 'Download Stems'}
+                                                    </a>
                                                 ) : (
-                                                    <div className="flex-1 bg-zinc-800/50 text-zinc-600 py-2 rounded-lg text-[10px] font-bold uppercase text-center border border-white/5 cursor-not-allowed">Stems Locked</div>
+                                                    <div className={`${viewMode === 'list' ? 'px-4 aspect-square flex items-center justify-center' : 'flex-1 py-2'} bg-zinc-800/50 text-zinc-600 rounded-lg text-[10px] font-bold uppercase text-center border border-white/5 cursor-not-allowed`}>
+                                                        {viewMode === 'list' ? 'Locked' : 'Stems Locked'}
+                                                    </div>
                                                 )}
                                             </div>
                                         </div>
@@ -370,12 +428,28 @@ const Dashboard = () => {
                                     <div className="w-1 h-8 bg-gold"></div>
                                     MY PRODUCTION
                                 </h2>
-                                <button
-                                    onClick={() => setActiveTab('uploadBeat')}
-                                    className="w-full md:w-auto bg-white text-black px-6 py-3 rounded-xl font-bold uppercase text-xs tracking-widest hover:scale-105 transition-transform flex items-center justify-center gap-2 shadow-lg shadow-white/10"
-                                >
-                                    <Plus size={16} /> Upload New Beat
-                                </button>
+                                <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-white/10">
+                                        <button
+                                            onClick={() => setViewMode('grid')}
+                                            className={`p-2 rounded-md transition-all ${viewMode === 'grid' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-white'}`}
+                                        >
+                                            <LayoutGrid size={16} />
+                                        </button>
+                                        <button
+                                            onClick={() => setViewMode('list')}
+                                            className={`p-2 rounded-md transition-all ${viewMode === 'list' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-white'}`}
+                                        >
+                                            <List size={16} />
+                                        </button>
+                                    </div>
+                                    <button
+                                        onClick={() => setActiveTab('uploadBeat')}
+                                        className="w-full md:w-auto bg-white text-black px-6 py-3 rounded-xl font-bold uppercase text-xs tracking-widest hover:scale-105 transition-transform flex items-center justify-center gap-2 shadow-lg shadow-white/10"
+                                    >
+                                        <Plus size={16} /> <span className="hidden md:inline">Upload New Beat</span> <span className="md:hidden">New</span>
+                                    </button>
+                                </div>
                             </div>
 
                             {(!user?.beats || user.beats.length === 0) ? (
@@ -385,24 +459,38 @@ const Dashboard = () => {
                                     <button onClick={() => setActiveTab('uploadBeat')} className="text-gold hover:underline mt-2 inline-block font-bold">Upload your first beat</button>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "space-y-2"}>
                                     {myBeats.map((beat) => (
-                                        <div key={beat.id} className="bg-zinc-900 border border-white/5 p-6 rounded-2xl flex items-center justify-between group hover:border-gold/30 transition-all">
+                                        <div key={beat.id} className={`bg-zinc-900 border border-white/5 p-6 rounded-2xl group hover:border-gold/30 transition-all ${viewMode === 'list' ? 'flex items-center justify-between' : ''}`}>
                                             <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 bg-zinc-800 rounded-lg flex items-center justify-center text-zinc-500 group-hover:text-gold transition-colors">
-                                                    <Music size={24} />
+                                                <div className={`rounded-lg flex items-center justify-center text-zinc-500 group-hover:text-gold transition-colors ${viewMode === 'list' ? 'w-10 h-10 bg-zinc-800' : 'w-12 h-12 bg-zinc-800'}`}>
+                                                    <Music size={viewMode === 'list' ? 16 : 24} />
                                                 </div>
                                                 <div>
-                                                    <h3 className="font-bold text-white">{beat.title}</h3>
+                                                    <h3 className="font-bold text-white text-sm lg:text-base">{beat.title}</h3>
                                                     <p className="text-[10px] text-zinc-500 uppercase font-black tracking-widest">{beat.genre} • {beat.bpm} BPM</p>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-4 text-right">
-                                                <div>
-                                                    <div className="text-white font-black text-sm">$30/$100/$500</div>
-                                                    <div className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">3-Tier Active</div>
-                                                </div>
+                                            <div className={`flex items-center gap-4 text-right ${viewMode === 'grid' ? 'mt-4 justify-between border-t border-white/5 pt-4' : ''}`}>
+                                                {!viewMode || viewMode === 'grid' ? (
+                                                    <div>
+                                                        <div className="text-white font-black text-sm">$30/$100/$500</div>
+                                                        <div className="text-[9px] text-zinc-500 uppercase font-bold tracking-widest">3-Tier Active</div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="hidden md:block">
+                                                        <div className="text-white font-black text-xs">$30+</div>
+                                                    </div>
+                                                )}
+
                                                 <div className="flex items-center gap-2">
+                                                    <button
+                                                        onClick={() => handleShareBeat(beat.id)}
+                                                        className="p-2 bg-white/5 hover:bg-white/10 hover:text-white rounded-lg transition-all text-zinc-500"
+                                                        title="Copy Share Link"
+                                                    >
+                                                        <Share2 size={16} />
+                                                    </button>
                                                     <button
                                                         onClick={() => {
                                                             setEditingBeat(beat);
@@ -544,7 +632,7 @@ const Dashboard = () => {
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-3 gap-6">
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                                         <div className="space-y-2">
                                             <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">BPM</label>
                                             <input
@@ -566,9 +654,22 @@ const Dashboard = () => {
                                             />
                                         </div>
                                         <div className="space-y-2">
+                                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Mastering</label>
+                                            <select
+                                                value={beatForm.masteringLevel || 'Mastered'}
+                                                onChange={e => setBeatForm({ ...beatForm, masteringLevel: e.target.value })}
+                                                className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-white focus:border-gold outline-none transition-colors appearance-none"
+                                            >
+                                                <option>Mastered</option>
+                                                <option>Unmastered</option>
+                                                <option>Mix Reference</option>
+                                                <option>Radio Ready</option>
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2">
                                             <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Pricing Model</label>
-                                            <div className="bg-black/50 border border-white/5 rounded-xl p-3 h-[48px] flex justify-between items-center">
-                                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest whitespace-nowrap">Standard 3-Tier</span>
+                                            <div className="bg-black/50 border border-white/5 rounded-xl p-3 h-[48px] flex justify-between items-center whitespace-nowrap overflow-hidden">
+                                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Standard 3-Tier</span>
                                             </div>
                                         </div>
                                     </div>

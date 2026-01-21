@@ -35,7 +35,19 @@ const Login = () => {
         }
     };
 
-    // ... social login code ...
+    const handleSocialLogin = async (provider) => {
+        setSocialLoading(provider);
+        setError('');
+
+        const result = await loginWithProvider(provider);
+
+        if (result.success) {
+            navigate('/dashboard');
+        } else {
+            setError(result.error);
+        }
+        setSocialLoading(null);
+    };
 
     return (
         <div className="min-h-screen bg-black flex items-center justify-center px-4 pt-20">
