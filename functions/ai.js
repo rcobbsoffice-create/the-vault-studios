@@ -39,6 +39,10 @@ app.post('/', async (req, res) => {
             systemPrompt += "Continue the existing lyrics naturally. Maintain the same rhyme scheme, tone, and rhythm.";
             userPrompt = `Current Lyrics:\n${currentLyrics}\n\nContinue from here:`;
             break;
+        case 'suggestBeatMetadata':
+            systemPrompt += "You are a professional music producer and A&R. Based on the user's description of a beat, suggest a catchy, creative Track Title, an appropriate BPM, and a likely musical Key. Return ONLY a JSON object with keys: title, bpm, key.";
+            userPrompt = `Beat Description: ${prompt}`;
+            break;
         default:
             systemPrompt += "Help the user with their songwriting task.";
             userPrompt = prompt;

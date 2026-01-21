@@ -19,7 +19,8 @@ import {
     MessageSquare,
     PanelLeft,
     FileText,
-    Edit
+    Edit,
+    Sparkles
 } from 'lucide-react';
 import AudioPlayer from '../components/AudioPlayer';
 import SessionNotes from '../components/SessionNotes';
@@ -476,7 +477,49 @@ const Dashboard = () => {
                                 }} className="space-y-6">
                                     <div className="grid grid-cols-2 gap-6">
                                         <div className="space-y-2">
-                                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Beat Title</label>
+                                            <div className="flex justify-between items-center">
+                                                <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Beat Title</label>
+                                                <button
+                                                    type="button"
+                                                    onClick={async () => {
+                                                        const desc = prompt("Describe your beat's vibe (e.g. Dark melodic trap with heavy 808s):");
+                                                        if (!desc) return;
+
+                                                        const isLocal = window.location.hostname === 'localhost';
+                                                        const functionUrl = isLocal
+                                                            ? 'http://localhost:5001/print-lab-studios/us-central1/aiWriter'
+                                                            : 'https://us-central1-print-lab-studios.cloudfunctions.net/aiWriter';
+
+                                                        try {
+                                                            const response = await fetch(functionUrl, {
+                                                                method: 'POST',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify({ prompt: desc, mode: 'suggestBeatMetadata' })
+                                                            });
+                                                            const data = await response.json();
+                                                            if (data.success) {
+                                                                try {
+                                                                    const suggested = JSON.parse(data.result);
+                                                                    setBeatForm(prev => ({
+                                                                        ...prev,
+                                                                        title: suggested.title || prev.title,
+                                                                        bpm: suggested.bpm || prev.bpm,
+                                                                        songKey: suggested.key || prev.songKey
+                                                                    }));
+                                                                } catch (e) {
+                                                                    // If not JSON, use the raw text as title
+                                                                    setBeatForm(prev => ({ ...prev, title: data.result }));
+                                                                }
+                                                            }
+                                                        } catch (err) {
+                                                            alert("AI suggestion failed: " + err.message);
+                                                        }
+                                                    }}
+                                                    className="text-[9px] font-black text-gold uppercase hover:text-white transition-colors flex items-center gap-1"
+                                                >
+                                                    <Sparkles size={10} /> Smart Suggest
+                                                </button>
+                                            </div>
                                             <input
                                                 type="text"
                                                 required
@@ -501,7 +544,7 @@ const Dashboard = () => {
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-6">
+                                    <div className="grid grid-cols-3 gap-6">
                                         <div className="space-y-2">
                                             <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">BPM</label>
                                             <input
@@ -513,12 +556,19 @@ const Dashboard = () => {
                                             />
                                         </div>
                                         <div className="space-y-2">
+                                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Song Key</label>
+                                            <input
+                                                type="text"
+                                                value={beatForm.songKey || ''}
+                                                onChange={e => setBeatForm({ ...beatForm, songKey: e.target.value })}
+                                                className="w-full bg-black border border-white/10 rounded-xl px-4 py-3 text-white focus:border-gold outline-none transition-colors"
+                                                placeholder="C# Minor"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
                                             <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Pricing Model</label>
-                                            <div className="bg-black/50 border border-white/5 rounded-xl p-3 flex justify-between items-center">
-                                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">3-Tier Standard</span>
-                                                <div className="flex gap-2">
-                                                    <span className="text-[10px] font-black text-white">$30 / $100 / $500</span>
-                                                </div>
+                                            <div className="bg-black/50 border border-white/5 rounded-xl p-3 h-[48px] flex justify-between items-center">
+                                                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest whitespace-nowrap">Standard 3-Tier</span>
                                             </div>
                                         </div>
                                     </div>

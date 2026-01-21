@@ -52,10 +52,17 @@ const BeatCard = ({ beat, onPlay, isPlaying, onLicense, isLicensed, onToggleFavo
                     {/* Info */}
                     <div className="flex-1 min-w-0">
                         <h3 className="font-bold text-white truncate group-hover:text-gold transition-colors">{beat.title}</h3>
-                        <div className="flex items-center gap-3 text-xs text-zinc-500 font-bold uppercase tracking-wider mt-1">
+                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mt-0.5">Prod. {beat.producerName || 'Vault Producer'}</p>
+                        <div className="flex items-center gap-3 text-xs text-zinc-500 font-bold uppercase tracking-wider mt-1.5">
                             <span>{beat.genre}</span>
                             <span className="w-1 h-1 bg-zinc-700 rounded-full"></span>
                             <span>{beat.bpm} BPM</span>
+                            {beat.songKey && (
+                                <>
+                                    <span className="w-1 h-1 bg-zinc-700 rounded-full"></span>
+                                    <span className="text-gold">{beat.songKey}</span>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>

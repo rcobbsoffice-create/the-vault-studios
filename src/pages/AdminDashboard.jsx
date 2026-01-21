@@ -32,10 +32,10 @@ import { functions } from '../firebase';
 import { httpsCallable } from 'firebase/functions';
 
 const AdminDashboard = () => {
-    const { allUsers, allBookings, updateArtistBounces, updateArtistBooking, deleteArtistBooking, addArtist, deleteArtist, uploadBounce, updateUserProfile } = useAuth();
+    const { allUsers, allBookings, allBeats, updateArtistBounces, updateArtistBooking, deleteArtistBooking, addArtist, deleteArtist, uploadBounce, updateUserProfile } = useAuth();
 
     // View State
-    const [currentView, setCurrentView] = useState('dashboard'); // 'dashboard', 'calendar', 'clients', 'payments', 'marketing', 'voice'
+    const [currentView, setCurrentView] = useState('dashboard'); // 'dashboard', 'calendar', 'clients', 'beats', 'payments', 'marketing', 'voice'
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     // Selection State
@@ -163,6 +163,17 @@ const AdminDashboard = () => {
 
     // 4. Selected Artist Insights
     const totalInvested = useMemo(() => (selectedArtist?.bookings || []).reduce((sum, b) => b.status === 'Confirmed' ? sum + (b.price || 0) : sum, 0), [selectedArtist]);
+
+    // 5. Beats Grouped by Producer
+    const beatsByProducer = useMemo(() => {
+        const grouped = {};
+        allBeats.forEach(beat => {
+            const pName = beat.producerName || 'Unknown Producer';
+            if (!grouped[pName]) grouped[pName] = [];
+            grouped[pName].push(beat);
+        });
+        return grouped;
+    }, [allBeats]);
 
     // Handlers
     const handleArtistSelect = (artist) => {
@@ -677,6 +688,9 @@ const AdminDashboard = () => {
                         <button onClick={() => { setCurrentView('clients'); setIsMobileMenuOpen(false); }} className={`w-full p-4 rounded-xl flex items-center gap-3 font-bold uppercase tracking-widest text-xs transition-all ${currentView === 'clients' ? 'bg-gold text-black shadow-lg shadow-gold/20' : 'bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>
                             <Users size={18} /> Clients
                         </button>
+                        <button onClick={() => { setCurrentView('beats'); setIsMobileMenuOpen(false); }} className={`w-full p-4 rounded-xl flex items-center gap-3 font-bold uppercase tracking-widest text-xs transition-all ${currentView === 'beats' ? 'bg-gold text-black shadow-lg shadow-gold/20' : 'bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>
+                            <Music size={18} /> Beats
+                        </button>
                         <button onClick={() => { setCurrentView('payments'); setIsMobileMenuOpen(false); }} className={`w-full p-4 rounded-xl flex items-center gap-3 font-bold uppercase tracking-widest text-xs transition-all ${currentView === 'payments' ? 'bg-gold text-black shadow-lg shadow-gold/20' : 'bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>
                             <DollarSign size={18} /> Payments
                         </button>
@@ -1051,6 +1065,83 @@ const AdminDashboard = () => {
                                 </div>
                             </div>
                         )}
+                        {/* 3. BEATS VIEW */}
+                        {currentView === 'beats' && (
+                            <div className="space-y-12 animate-in fade-in slide-in-from-right-4 duration-500">
+                                <div className="bg-zinc-950 border border-white/5 rounded-[2.5rem] p-10 shadow-2xl relative overflow-hidden">
+                                    <div className="absolute inset-0 bg-noise opacity-[0.02] pointer-events-none"></div>
+                                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
+                                        <div>
+                                            <h3 className="font-display text-4xl font-black text-white uppercase tracking-tighter">Global <span className="text-gold">Beat Catalog</span></h3>
+                                            <p className="text-zinc-500 font-bold uppercase tracking-widest text-[10px] mt-2">{allBeats.length} total tracks across {Object.keys(beatsByProducer).length} producers</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-16">
+                                        {Object.entries(beatsByProducer).map(([producer, beats]) => (
+                                            <div key={producer} className="space-y-6">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="h-px flex-1 bg-white/5"></div>
+                                                    <h4 className="text-gold font-black uppercase tracking-[0.3em] text-xs">{producer}</h4>
+                                                    <div className="h-px flex-1 bg-white/5"></div>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                    {beats.map(beat => (
+                                                        <div key={beat.id} className="bg-zinc-900 border border-white/5 rounded-2xl p-6 hover:border-gold/30 transition-all group relative overflow-hidden">
+                                                            <div className="flex justify-between items-start mb-4">
+                                                                <div>
+                                                                    <h5 className="font-bold text-white uppercase tracking-tight text-lg mb-1">{beat.title}</h5>
+                                                                    <div className="flex gap-3 text-[9px] font-black text-zinc-500 uppercase tracking-widest">
+                                                                        <span>{beat.genre}</span>
+                                                                        <span className="text-gold">{beat.bpm} BPM</span>
+                                                                        {beat.songKey && <span className="text-white/40">{beat.songKey}</span>}
+                                                                    </div>
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        if (window.confirm(`Delete beat "${beat.title}"?`)) {
+                                                                            deleteBeat(beat.producerId, beat.id);
+                                                                        }
+                                                                    }}
+                                                                    className="p-2 text-zinc-700 hover:text-red-500 transition-colors"
+                                                                >
+                                                                    <Trash2 size={16} />
+                                                                </button>
+                                                            </div>
+
+                                                            <div className="flex items-center justify-between mt-auto">
+                                                                <div className="flex items-center gap-2">
+                                                                    <button
+                                                                        onClick={() => togglePreview({ ...beat, url: beat.previewUrl })}
+                                                                        className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white hover:bg-white hover:text-black transition-all"
+                                                                    >
+                                                                        {previewPlayingId === beat.id ? <Pause size={16} /> : <Play size={16} fill="currentColor" />}
+                                                                    </button>
+                                                                    <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Preview Track</span>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <p className="text-[10px] font-black text-white tracking-widest uppercase">$30-$500</p>
+                                                                    <p className="text-[8px] font-bold text-zinc-700 uppercase tracking-tighter">{new Date(beat.uploadedAt).toLocaleDateString()}</p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+
+                                        {allBeats.length === 0 && (
+                                            <div className="text-center py-20 grayscale opacity-30">
+                                                <Music size={48} className="mx-auto mb-4 text-zinc-500" />
+                                                <p className="text-xs font-black uppercase tracking-widest">Catalog is empty</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* 4. MARKETING VIEW */}
                         {currentView === 'marketing' && (
                             <div className="animate-in fade-in slide-in-from-bottom-8 duration-500 space-y-8">

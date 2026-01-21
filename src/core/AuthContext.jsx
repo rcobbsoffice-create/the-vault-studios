@@ -45,6 +45,7 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [artists, setArtists] = useState([]); // Raw Artist List
     const [adminBookings, setAdminBookings] = useState([]); // All Bookings (for Admin)
+    const [allBeats, setAllBeats] = useState([]); // All Beats (for Admin)
 
     // Listen for Auth Changes & Real-time User Profile
     useEffect(() => {
@@ -176,6 +177,23 @@ export const AuthProvider = ({ children }) => {
 
         return () => unsubscribe();
     }, [user?.uid, user?.role]); // Re-run if user ID or Role changes
+
+    // Listen for All Beats (Admin only)
+    useEffect(() => {
+        if (!user) return;
+        const isAdmin = user.email?.includes('admin@printlab.com') || user.role === 'ADMIN';
+        if (!isAdmin) return;
+
+        const q = collection(db, "beats");
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const beats = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setAllBeats(beats);
+        }, (error) => {
+            console.log("Error fetching all beats:", error);
+        });
+
+        return () => unsubscribe();
+    }, [user?.uid, user?.role]);
 
     const signup = async (email, password, name, role = 'ARTIST') => {
         try {
@@ -481,9 +499,11 @@ export const AuthProvider = ({ children }) => {
             const newBeat = {
                 id: Date.now().toString(),
                 producerId,
+                producerName: user?.name || 'Unknown Producer',
                 title: metadata.title,
                 genre: metadata.genre || 'Hip Hop',
                 bpm: metadata.bpm || '',
+                songKey: metadata.songKey || '',
                 price: metadata.price || '29.99',
                 previewUrl: previewURL,
                 stemsUrl: stemsURL,
@@ -606,6 +626,7 @@ export const AuthProvider = ({ children }) => {
         user,
         allUsers: derivedAllUsers,
         allBookings: adminBookings,
+        allBeats,
         signup,
         login,
         logout,
