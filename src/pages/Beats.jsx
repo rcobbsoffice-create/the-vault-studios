@@ -3,7 +3,7 @@ import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../core/AuthContext';
 import BeatCard from '../components/BeatCard';
-import { Search, Filter, Music, Play, Pause, LayoutGrid, List } from 'lucide-react';
+import { Search, Filter, Music, Play, Pause, LayoutGrid, List, Heart } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
 const Beats = () => {
@@ -202,6 +202,15 @@ const Beats = () => {
                                     </div>
 
                                     <div className="flex items-center gap-4 hidden md:flex">
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleFavorite(beat);
+                                            }}
+                                            className={`p-2 rounded-lg transition-all ${isFavorited(beat.id) ? 'bg-gold text-black' : 'text-zinc-500 hover:text-white bg-white/5 hover:bg-white/10'}`}
+                                        >
+                                            <Heart size={18} fill={isFavorited(beat.id) ? "currentColor" : "none"} />
+                                        </button>
                                         {beat.masteringLevel && (
                                             <span className="text-[10px] font-black uppercase tracking-widest bg-white/5 px-2 py-1 rounded text-zinc-400">
                                                 {beat.masteringLevel}
