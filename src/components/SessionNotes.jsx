@@ -193,8 +193,6 @@ const SessionNotes = ({ bookings, user, licensedBeats, favoriteBeats }) => {
                 body: JSON.stringify({
                     prompt: aiPrompt,
                     mode: aiMode,
-                    prompt: aiPrompt,
-                    mode: aiMode,
                     currentLyrics: activePage.content,
                     context: selectedType === 'beat' || selectedType === 'favorite' ? selectedId : ''
                 })
