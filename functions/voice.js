@@ -74,7 +74,7 @@ const incomingCallHandler = async (req, res) => {
 
         const twiml = new Twilio.twiml.VoiceResponse();
 
-        let greeting = "Hello, thanks for calling Print Lab Studios. I'm Aria, the AI receptionist.";
+        let greeting = "Hello, thanks for calling Print Audio Lab. I'm Aria, the AI receptionist.";
 
         twiml.say({ voice: 'Polly.Amy-Neural' }, greeting);
 
@@ -133,7 +133,7 @@ const processSpeechHandler = (req, res) => {
             console.log("ProcessSpeech: Generating AI response...");
 
             const systemPrompt = `
-                You are Aria, the friendly and sophisticated receptionist for Print Lab Studios.
+                You are Aria, the friendly and sophisticated receptionist for Print Audio Lab.
                 - Your tone is smooth, alluring, and professional. You are helpful but have a hint of sophisticated charm.
                 - Studio A is $75/hr. Studio B is $65/hr.
                 - We need: Artist Name, Phone Number, Studio choice (A or B), Date, Time, and Duration (total hours).
@@ -338,7 +338,7 @@ async function sendSmsLink(to, link) {
     console.log(`SMS_SEND_ATTEMPT: To: ${to}, Link: ${link}`);
     try {
         const message = await twilio.messages.create({
-            body: `Print Lab Studios: Complete your booking deposit here: ${link}`,
+            body: `Print Audio Lab: Complete your booking deposit here: ${link}`,
             from: process.env.TWILIO_PHONE_NUMBER,
             to: to
         });

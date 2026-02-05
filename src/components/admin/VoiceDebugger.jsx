@@ -27,7 +27,7 @@ const VoiceDebugger = () => {
         // For Debugger: We just assume connection and wait for user to "speak".
         setTimeout(() => {
             setStatus('connected');
-            setTranscript(prev => [...prev, { from: 'AI', text: "Hello, thanks for calling Print Lab Studios. I'm Aria, the AI receptionist." }]);
+            setTranscript(prev => [...prev, { from: 'AI', text: "Hello, thanks for calling Print Audio Lab. I'm Aria, the AI receptionist." }]);
         }, 1000);
     };
 

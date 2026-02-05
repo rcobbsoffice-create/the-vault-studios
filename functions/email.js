@@ -1,28 +1,23 @@
 const functions = require("firebase-functions");
 
-// Lazy load nodemailer
-let transporter;
-function getTransporter() {
-    if (!transporter) {
+// Lazy load Resend
+let resend;
+function getResend() {
+    if (!resend) {
         require('dotenv').config();
-        const user = process.env.EMAIL_USER;
-        const pass = process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s+/g, '') : undefined;
-
-        console.log("DEBUG: Initializing Transporter");
-        console.log(`DEBUG: User: ${user ? user.substring(0, 3) + '***' : 'UNDEFINED'}`);
-        console.log(`DEBUG: Pass: ${pass ? 'Set (' + pass.length + ' chars)' : 'UNDEFINED'}`);
-
-        const nodemailer = require("nodemailer");
-        transporter = nodemailer.createTransport({
-            service: "gmail",
-            auth: {
-                user: user || "demo@example.com",
-                pass: pass || "demo-password",
-            },
-        });
+        const { Resend } = require('resend');
+        const apiKey = process.env.RESEND_API_KEY;
+        
+        console.log("DEBUG: Initializing Resend");
+        console.log(`DEBUG: API Key: ${apiKey ? 'Set (' + apiKey.substring(0, 8) + '...)' : 'UNDEFINED'}`);
+        
+        resend = new Resend(apiKey);
     }
-    return transporter;
+    return resend;
 }
+
+// Default sender - update this to your verified domain
+const DEFAULT_FROM = process.env.RESEND_FROM_EMAIL || "Print Audio Lab <onboarding@resend.dev>";
 
 /**
  * Callable function to send emails.
@@ -46,23 +41,27 @@ exports.sendEmail = functions.https.onCall(async (data, context) => {
         );
     }
 
-    const mailOptions = {
-        from: "The Vault Studios <no-reply@thevaultstudios.com>",
-        to,
-        subject,
-        html: html || text,
-        text: text || "Please view this email in an HTML compatible viewer.",
-    };
-
     try {
-        if (!process.env.EMAIL_USER) {
-            console.warn("EMAIL_USER not set. Simulating email send.");
-            return { success: true, message: "Simulated email sent (Config missing)" };
+        if (!process.env.RESEND_API_KEY) {
+            console.warn("RESEND_API_KEY not set. Simulating email send.");
+            return { success: true, message: "Simulated email sent (API key missing)" };
         }
 
-        const info = await getTransporter().sendMail(mailOptions);
-        console.log("Email sent: %s", info.messageId);
-        return { success: true, messageId: info.messageId };
+        const { data: emailData, error } = await getResend().emails.send({
+            from: DEFAULT_FROM,
+            to: Array.isArray(to) ? to : [to],
+            subject,
+            html: html || undefined,
+            text: text || undefined,
+        });
+
+        if (error) {
+            console.error("Resend error:", error);
+            throw new functions.https.HttpsError("internal", "Failed to send email.", error);
+        }
+
+        console.log("Email sent:", emailData.id);
+        return { success: true, messageId: emailData.id };
     } catch (error) {
         console.error("Error sending email:", error);
         throw new functions.https.HttpsError("internal", "Failed to send email.", error);
@@ -85,23 +84,28 @@ exports.sendEmailDev = functions.https.onRequest(async (req, res) => {
                 return;
             }
 
-            const mailOptions = {
-                from: "The Vault Studios <no-reply@thevaultstudios.com>",
-                to,
-                subject,
-                html: html || text,
-                text: text || "Please view this email in an HTML compatible viewer.",
-            };
-
-            if (!process.env.EMAIL_USER) {
-                console.warn("EMAIL_USER not set. Simulating email send.");
-                res.send({ success: true, message: "Simulated email sent (Config missing)" });
+            if (!process.env.RESEND_API_KEY) {
+                console.warn("RESEND_API_KEY not set. Simulating email send.");
+                res.send({ success: true, message: "Simulated email sent (API key missing)" });
                 return;
             }
 
-            const info = await getTransporter().sendMail(mailOptions);
-            console.log("Email sent: %s", info.messageId);
-            res.send({ success: true, messageId: info.messageId });
+            const { data: emailData, error } = await getResend().emails.send({
+                from: DEFAULT_FROM,
+                to: Array.isArray(to) ? to : [to],
+                subject,
+                html: html || undefined,
+                text: text || undefined,
+            });
+
+            if (error) {
+                console.error("Resend error:", error);
+                res.status(500).send({ error: error.message });
+                return;
+            }
+
+            console.log("Email sent:", emailData.id);
+            res.send({ success: true, messageId: emailData.id });
 
         } catch (error) {
             console.error("Error sending email:", error);
@@ -111,4 +115,5 @@ exports.sendEmailDev = functions.https.onRequest(async (req, res) => {
 });
 
 // Export helper for use in other modules
-exports.getTransporter = getTransporter;
+exports.getResend = getResend;
+exports.DEFAULT_FROM = DEFAULT_FROM;

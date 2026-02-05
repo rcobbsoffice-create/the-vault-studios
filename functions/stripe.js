@@ -90,7 +90,7 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
     try {
         ensureFirebase();
         const stripeClient = initStripe();
-        const { getTransporter } = require('./email');
+        const { getResend, DEFAULT_FROM } = require('./email');
 
         let event;
         if (process.env.STRIPE_WEBHOOK_SECRET) {
@@ -144,25 +144,30 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
                                 name: name || 'Valued Client',
                                 phone: phone || '',
                                 role: 'client',
-                                createdAt: new Date(), // Using new Date() for reliability in emulator
+                                createdAt: new Date(),
                                 source: 'stripe_deposit',
                                 stripeCustomerId: session.customer
                             });
 
-                            await getTransporter().sendMail({
-                                from: "The Vault Studios <no-reply@thevaultstudios.com>",
-                                to: email,
-                                subject: "Welcome to The Vault Studios",
-                                html: `
-                                    <h1>Welcome, ${name || 'Client'}!</h1>
-                                    <p>Thank you for your deposit.</p>
-                                    <p>Your account has been created.</p>
-                                    <p><strong>Email:</strong> ${email}</p>
-                                    <p><strong>Temporary Password:</strong> ${tempPassword}</p>
-                                    <p>Please log in and change your password.</p>
-                                `
-                            });
-                            console.log("New User Created and Email Sent");
+                            // Send welcome email via Resend
+                            if (process.env.RESEND_API_KEY) {
+                                await getResend().emails.send({
+                                    from: DEFAULT_FROM,
+                                    to: [email],
+                                    subject: "Welcome to Print Audio Lab",
+                                    html: `
+                                        <h1>Welcome, ${name || 'Client'}!</h1>
+                                        <p>Thank you for your deposit.</p>
+                                        <p>Your account has been created.</p>
+                                        <p><strong>Email:</strong> ${email}</p>
+                                        <p><strong>Temporary Password:</strong> ${tempPassword}</p>
+                                        <p>Please log in and change your password.</p>
+                                    `
+                                });
+                                console.log("New User Created and Email Sent via Resend");
+                            } else {
+                                console.warn("RESEND_API_KEY not set. Skipping welcome email.");
+                            }
                         } catch (createError) {
                             if (createError.code && createError.code.startsWith('app/')) {
                                 console.warn(`DEV MODE: Ignoring Admin SDK Error: ${createError.message}`);

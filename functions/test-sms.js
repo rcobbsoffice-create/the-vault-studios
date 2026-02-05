@@ -14,7 +14,7 @@ async function testSms() {
 
     try {
         const message = await client.messages.create({
-            body: `TEST: Print Lab Studios Booking Link: ${link}`,
+            body: `TEST: Print Audio Lab Booking Link: ${link}`,
             from: process.env.TWILIO_PHONE_NUMBER,
             to: to
         });

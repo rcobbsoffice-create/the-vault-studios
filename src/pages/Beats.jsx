@@ -201,7 +201,7 @@ const Beats = () => {
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-4 hidden md:flex">
+                                    <div className="items-center gap-4 hidden md:flex">
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
@@ -217,7 +217,7 @@ const Beats = () => {
                                             </span>
                                         )}
                                         <div className="text-right">
-                                            <div className="text-gold font-bold">${beat.price}</div>
+                                            <div className="text-gold font-bold">${(Number(beat.price) || 29.99).toFixed(2)}</div>
                                         </div>
                                         {isLicensed(beat.id) ? (
                                             <span className="text-green-500 text-xs font-bold uppercase tracking-widest border border-green-500/20 px-3 py-1 rounded-full">Licensed</span>

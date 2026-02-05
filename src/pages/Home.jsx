@@ -23,7 +23,7 @@ const Home = () => {
                         Norfolk, Virginia
                     </h2>
                     <h1 className="text-6xl md:text-8xl font-display font-bold mb-6 leading-tight animate-fade-in-up delay-100">
-                        PRINT LAB <br /> STUDIOS
+                        PRINT AUDIO LAB
                     </h1>
                     <p className="text-gray-300 text-xl md:text-2xl mb-10 max-w-2xl mx-auto font-light animate-fade-in-up delay-200">
                         Premium sound. Industrial aesthetic. Unmatched vibe.

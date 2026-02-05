@@ -10,6 +10,9 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import Beats from './pages/Beats';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import DataDeletion from './pages/DataDeletion';
+import TermsOfService from './pages/TermsOfService';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -64,6 +67,9 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/data-deletion" element={<DataDeletion />} />
+            <Route path="/terms" element={<TermsOfService />} />
           </Routes>
           <AIReceptionist />
         </div>

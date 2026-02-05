@@ -1,7 +1,7 @@
 export const EmailTemplates = {
   newsletter: {
     name: "Monthly Newsletter",
-    subject: "Print Lab Studios: Monthly Refresh",
+    subject: "Print Audio Lab: Monthly Refresh",
     html: `
 <div style="font-family: Arial, sans-serif; bg-color: #000; color: #fff; padding: 20px;">
   <h1 style="color: #D4AF37;">PRINT LAB STUDIOS</h1>

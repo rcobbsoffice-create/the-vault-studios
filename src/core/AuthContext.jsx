@@ -119,14 +119,14 @@ export const AuthProvider = ({ children }) => {
         };
     }, []);
 
-    // Listen for Artists (For Admin View)
+    // Listen for All Users (For Admin View)
     useEffect(() => {
         if (!user) {
             setArtists([]);
             return;
         }
 
-        const q = query(collection(db, "users"), where("role", "==", "ARTIST"));
+        const q = collection(db, "users");
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const users = snapshot.docs.map(doc => ({
                 id: doc.id,
@@ -349,6 +349,10 @@ export const AuthProvider = ({ children }) => {
     };
 
     const addArtist = async (artistData) => {
+        return addNewUser(artistData, 'ARTIST');
+    };
+
+    const addNewUser = async (userData, role = 'ARTIST') => {
         // Create a secondary app to create the user without logging out the admin
         try {
             const { initializeApp, getApp, deleteApp } = await import("firebase/app");
@@ -367,18 +371,18 @@ export const AuthProvider = ({ children }) => {
             const secondaryAuth = getSecondaryAuth(secondaryApp);
 
             // Create User in Auth
-            const userCredential = await createSecondaryUser(secondaryAuth, artistData.email, artistData.password);
+            const userCredential = await createSecondaryUser(secondaryAuth, userData.email, userData.password);
             const newUser = userCredential.user;
 
             // Update Profile (Display Name)
-            await updateSecondaryProfile(newUser, { displayName: artistData.name });
+            await updateSecondaryProfile(newUser, { displayName: userData.name });
 
             // Create Firestore Doc (Using the UID from Auth)
             await setDoc(doc(db, "users", newUser.uid), {
-                name: artistData.name,
-                email: artistData.email,
-                phone: artistData.phone || "",
-                role: 'ARTIST',
+                name: userData.name,
+                email: userData.email,
+                phone: userData.phone || "",
+                role: role,
                 createdAt: serverTimestamp(),
                 bookings: [],
                 bounces: [],
@@ -387,13 +391,11 @@ export const AuthProvider = ({ children }) => {
 
             // Cleanup
             await signOutSecondary(secondaryAuth);
-            // We usually don't need to delete the app immediately if we might reuse it, 
-            // but for safety in this context:
             await deleteApp(secondaryApp);
 
             return { success: true };
         } catch (error) {
-            console.error("Error adding artist:", error);
+            console.error("Error adding user:", error);
             return { success: false, error: error.message };
         }
     };
@@ -635,6 +637,7 @@ export const AuthProvider = ({ children }) => {
         login,
         logout,
         addArtist,
+        addNewUser,
         deleteArtist,
         updateArtistBooking,
         updateArtistBounces,

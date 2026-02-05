@@ -23,7 +23,9 @@ import {
     Pause,
     Mic,
     Menu,
-    X
+    X,
+    Shield,
+    UserCog
 } from 'lucide-react';
 import CalendarView from '../components/admin/CalendarView';
 import EmailEditor from '../components/admin/EmailEditor';
@@ -32,10 +34,10 @@ import { functions } from '../firebase';
 import { httpsCallable } from 'firebase/functions';
 
 const AdminDashboard = () => {
-    const { user, allUsers, allBookings, allBeats, updateArtistBounces, updateArtistBooking, deleteArtistBooking, addArtist, deleteArtist, uploadBeat, deleteBeat, uploadBounce, updateUserProfile } = useAuth();
+    const { user, allUsers, allBookings, allBeats, updateArtistBounces, updateArtistBooking, deleteArtistBooking, addArtist, addNewUser, deleteArtist, uploadBeat, deleteBeat, uploadBounce, updateUserProfile } = useAuth();
 
     // View State
-    const [currentView, setCurrentView] = useState('dashboard'); // 'dashboard', 'calendar', 'clients', 'beats', 'payments', 'marketing', 'voice'
+    const [currentView, setCurrentView] = useState('dashboard'); // 'dashboard', 'calendar', 'clients', 'beats', 'payments', 'marketing', 'voice', 'team'
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     // Selection State
@@ -89,6 +91,15 @@ const AdminDashboard = () => {
         password: 'vaultartist123'
     });
 
+    const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
+    const [newStaffForm, setNewStaffForm] = useState({
+        name: '',
+        email: '',
+        phone: '',
+        password: 'vaultstaff123',
+        role: 'ENGINEER'
+    });
+
     const [formData, setFormData] = useState({
         title: '',
         sessionName: '',
@@ -112,6 +123,7 @@ const AdminDashboard = () => {
 
     // 1. Revenue Stats
     const artists = useMemo(() => allUsers.filter(u => u.role === 'ARTIST'), [allUsers]);
+    const teamMembers = useMemo(() => allUsers.filter(u => u.role === 'ADMIN' || u.role === 'ENGINEER'), [allUsers]);
 
     const totalRevenue = useMemo(() => {
         return artists.reduce((acc, artist) => acc + (artist.bookings || []).reduce((sum, b) => b.status === 'Confirmed' ? sum + (b.price || 0) : sum, 0), 0);
@@ -205,6 +217,19 @@ const AdminDashboard = () => {
         addArtist(newArtistForm);
         setIsArtistModalOpen(false);
         setNewArtistForm({ name: '', email: '', phone: '', password: 'vaultartist123' });
+    };
+
+    const handleAddStaff = (e) => {
+        e.preventDefault();
+        addNewUser(newStaffForm, newStaffForm.role);
+        setIsStaffModalOpen(false);
+        setNewStaffForm({ name: '', email: '', phone: '', password: 'vaultstaff123', role: 'ENGINEER' });
+    };
+
+    const handleDeleteStaff = (staffId) => {
+        if (window.confirm('Are you sure you want to remove this staff member?')) {
+            deleteArtist(staffId); // Reusing deleteArtist as it deletes from 'users' collection
+        }
     };
 
     const handleDeleteArtist = (artistId) => {
@@ -873,6 +898,9 @@ const AdminDashboard = () => {
                         <button onClick={() => { setCurrentView('marketing'); setIsMobileMenuOpen(false); }} className={`w-full p-4 rounded-xl flex items-center gap-3 font-bold uppercase tracking-widest text-xs transition-all ${currentView === 'marketing' ? 'bg-gold text-black shadow-lg shadow-gold/20' : 'bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>
                             <Mail size={18} /> Marketing
                         </button>
+                        <button onClick={() => { setCurrentView('team'); setIsMobileMenuOpen(false); }} className={`w-full p-4 rounded-xl flex items-center gap-3 font-bold uppercase tracking-widest text-xs transition-all ${currentView === 'team' ? 'bg-gold text-black shadow-lg shadow-gold/20' : 'bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>
+                            <Shield size={18} /> Team
+                        </button>
 
                         <div className="h-px bg-white/5 my-4"></div>
 
@@ -902,7 +930,7 @@ const AdminDashboard = () => {
                                             <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity"><DollarSign size={80} className="text-[#00D632]" /></div>
                                             <div className="relative z-10">
                                                 <p className="text-gray-500 text-xs font-black uppercase tracking-[0.2em] mb-2">Confirmed Studio Revenue</p>
-                                                <div className="flex items-baseline gap-3"><p className="text-5xl font-display font-bold text-white tracking-tighter">${totalRevenue.toLocaleString()}</p><span className="text-[#00D632] text-xs font-bold uppercase tracking-widest">Gross Revenue</span></div>
+                                                <div className="flex items-baseline gap-3"><p className="text-5xl font-display font-bold text-white tracking-tighter">${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p><span className="text-[#00D632] text-xs font-bold uppercase tracking-widest">Gross Revenue</span></div>
                                                 <div className="mt-6 flex items-center gap-2 text-[#00D632]"><CheckCircle size={10} /><span className="text-[10px] font-bold uppercase tracking-widest">Verified Transitions Only</span></div>
                                             </div>
                                         </div>
@@ -916,7 +944,7 @@ const AdminDashboard = () => {
                                                 <div key={i} className="flex flex-col items-center justify-end h-full w-full group relative">
                                                     {/* Tooltip */}
                                                     <div className="absolute -top-10 opacity-0 group-hover:opacity-100 transition-opacity bg-white text-black text-[10px] font-bold px-2 py-1 rounded mb-1 whitespace-nowrap z-10">
-                                                        ${d.total.toLocaleString()}
+                                                        ${d.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                     </div>
                                                     <div
                                                         className="w-full bg-zinc-800 rounded-t-lg group-hover:bg-gold transition-all relative overflow-hidden"
@@ -961,11 +989,11 @@ const AdminDashboard = () => {
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div className="bg-zinc-900 border border-white/10 rounded-3xl p-8">
                                             <p className="text-gray-500 text-xs font-black uppercase tracking-[0.2em] mb-2">Pending Collections</p>
-                                            <div className="flex items-baseline gap-3"><p className="text-4xl font-display font-bold text-white tracking-tighter">${totalPending.toLocaleString()}</p></div>
+                                            <div className="flex items-baseline gap-3"><p className="text-4xl font-display font-bold text-white tracking-tighter">${totalPending.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>
                                         </div>
                                         <div className="bg-zinc-900 border border-white/10 rounded-3xl p-8">
                                             <p className="text-gray-500 text-xs font-black uppercase tracking-[0.2em] mb-2">Total Collected</p>
-                                            <div className="flex items-baseline gap-3"><p className="text-4xl font-display font-bold text-white tracking-tighter">${totalCollected.toLocaleString()}</p></div>
+                                            <div className="flex items-baseline gap-3"><p className="text-4xl font-display font-bold text-white tracking-tighter">${totalCollected.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div>
                                         </div>
                                     </div>
 
@@ -999,7 +1027,7 @@ const AdminDashboard = () => {
                                                         <div className="flex items-center gap-8 w-full md:w-auto justify-between md:justify-end">
                                                             <div className="text-right">
                                                                 <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1">{booking.paymentStatus === 'paid' ? 'Paid Amount' : 'Balance Due'}</p>
-                                                                <p className={`font-display text-xl font-black ${booking.paymentStatus === 'paid' ? 'text-[#00D632]' : 'text-white'}`}>${booking.price}</p>
+                                                                <p className={`font-display text-xl font-black ${booking.paymentStatus === 'paid' ? 'text-[#00D632]' : 'text-white'}`}>${(Number(booking.price) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                                                 {booking.depositAmount && booking.status === 'confirmed' && (
                                                                     <p className="text-[9px] text-zinc-500 font-bold uppercase mt-1">
                                                                         (Paid: ${booking.depositAmount})
@@ -1108,7 +1136,7 @@ const AdminDashboard = () => {
                                                                         </div>
                                                                         <div className="flex gap-4 text-xs text-gray-500 font-mono">
                                                                             <span>{booking.date} @ {booking.time}</span>
-                                                                            <span className="text-gold">${booking.price}</span>
+                                                                            <span className="text-gold">${(Number(booking.price) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                                                         </div>
                                                                     </div>
                                                                     <div className="flex gap-2">
@@ -1420,7 +1448,7 @@ const AdminDashboard = () => {
                                                                     <span className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Preview Track</span>
                                                                 </div>
                                                                 <div className="text-right">
-                                                                    <p className="text-[10px] font-black text-white tracking-widest uppercase">${beat.price || '29.99'}</p>
+                                                                    <p className="text-[10px] font-black text-white tracking-widest uppercase">${(Number(beat.price) || 29.99).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                                                     <p className="text-[8px] font-bold text-zinc-700 uppercase tracking-tighter">{new Date(beat.uploadedAt).toLocaleDateString()}</p>
                                                                 </div>
                                                             </div>
@@ -1471,7 +1499,60 @@ const AdminDashboard = () => {
                             </div>
                         )}
 
-                        {/* 5. VOICE AI DEBUGGER (Temporary) */}
+                        {/* 5. TEAM VIEW */}
+                        {currentView === 'team' && (
+                            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+                                <div className="bg-zinc-950 border border-white/5 rounded-[2.5rem] p-10 shadow-2xl relative overflow-hidden">
+                                    <div className="absolute inset-0 bg-noise opacity-[0.02] pointer-events-none"></div>
+                                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
+                                        <div>
+                                            <h3 className="font-display text-4xl font-black text-white uppercase tracking-tighter">Staff & <span className="text-gold">Engineers</span></h3>
+                                            <p className="text-zinc-500 font-bold uppercase tracking-widest text-[10px] mt-2">{teamMembers.length} active team members</p>
+                                        </div>
+                                        <button
+                                            onClick={() => setIsStaffModalOpen(true)}
+                                            className="bg-gold text-black px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-white transition-all shadow-lg shadow-gold/10"
+                                        >
+                                            Add Staff Member
+                                        </button>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {teamMembers.map(member => (
+                                            <div key={member.id} className="bg-zinc-900 border border-white/5 rounded-2xl p-6 hover:border-gold/30 transition-all group relative overflow-hidden">
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className={`w-12 h-12 rounded-full flex items-center justify-center font-black ${member.role === 'ADMIN' ? 'bg-gold text-black' : 'bg-indigo-500 text-white'}`}>
+                                                            {member.name.charAt(0)}
+                                                        </div>
+                                                        <div>
+                                                            <h5 className="font-bold text-white uppercase tracking-tight text-lg mb-1">{member.name}</h5>
+                                                            <div className="flex gap-3 text-[9px] font-black text-zinc-500 uppercase tracking-widest">
+                                                                <span className={member.role === 'ADMIN' ? 'text-gold' : 'text-indigo-400'}>{member.role}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {member.email !== user.email && (
+                                                        <button
+                                                            onClick={() => handleDeleteStaff(member.id)}
+                                                            className="p-2 text-zinc-700 hover:text-red-500 transition-colors"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <div className="space-y-2 mt-6">
+                                                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{member.email}</p>
+                                                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{member.phone || 'No Phone'}</p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 5.5 VOICE AI DEBUGGER (Temporary) */}
                         {currentView === 'voice' && (
                             <div className="animate-in fade-in slide-in-from-bottom-8 duration-500 flex justify-center">
                                 <VoiceDebugger />
@@ -1507,6 +1588,41 @@ const AdminDashboard = () => {
                                         <div className="flex gap-4 pt-4">
                                             <button type="button" onClick={() => setIsEditingProfile(false)} className="flex-1 py-4 text-zinc-500 font-bold uppercase tracking-widest hover:text-white transition-colors">Cancel</button>
                                             <button type="submit" className="flex-1 bg-gold text-black py-4 rounded-xl font-black uppercase tracking-widest hover:bg-yellow-500 transition-all active:scale-95 shadow-lg shadow-gold/10">Save Changes</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Add Staff Modal */}
+                        {isStaffModalOpen && (
+                            <div className="fixed inset-0 z-[140] flex items-center justify-center p-6 bg-black/90 backdrop-blur-xl animate-in fade-in duration-500">
+                                <div className="relative bg-zinc-950 border border-gold/30 w-full max-w-md rounded-[2.5rem] p-10 shadow-[0_0_80px_rgba(212,175,55,0.15)] animate-in zoom-in-95 duration-300 overflow-hidden">
+                                    <div className="absolute inset-0 bg-noise opacity-[0.03] pointer-events-none"></div>
+                                    <h3 className="font-display text-3xl font-black text-white uppercase tracking-tighter mb-8">Add <span className="text-gold">Staff Member</span></h3>
+                                    <form onSubmit={handleAddStaff} className="space-y-6">
+                                        <div>
+                                            <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-2">Full Name</label>
+                                            <input required type="text" placeholder="e.g. Alex Engineer" value={newStaffForm.name} onChange={(e) => setNewStaffForm({ ...newStaffForm, name: e.target.value })} className="w-full bg-black border border-white/10 rounded-2xl px-6 py-4 text-white font-bold focus:border-gold outline-none transition-all placeholder:text-zinc-800" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-2">Email</label>
+                                            <input required type="email" placeholder="staff@thevaultstudios.com" value={newStaffForm.email} onChange={(e) => setNewStaffForm({ ...newStaffForm, email: e.target.value })} className="w-full bg-black border border-white/10 rounded-2xl px-6 py-4 text-white font-bold focus:border-gold outline-none transition-all placeholder:text-zinc-800" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-2">Role</label>
+                                            <select value={newStaffForm.role} onChange={(e) => setNewStaffForm({ ...newStaffForm, role: e.target.value })} className="w-full bg-black border border-white/10 rounded-2xl px-6 py-4 text-white font-bold focus:border-gold outline-none transition-all appearance-none cursor-pointer">
+                                                <option value="ENGINEER">ENGINEER</option>
+                                                <option value="ADMIN">ADMIN</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] mb-2">Temp Password</label>
+                                            <input required type="text" value={newStaffForm.password} onChange={(e) => setNewStaffForm({ ...newStaffForm, password: e.target.value })} className="w-full bg-black border border-white/10 rounded-2xl px-6 py-4 text-white font-mono text-sm focus:border-gold outline-none transition-all" />
+                                        </div>
+                                        <div className="flex gap-4 pt-4">
+                                            <button type="button" onClick={() => setIsStaffModalOpen(false)} className="flex-1 py-4 text-zinc-500 font-bold uppercase tracking-widest hover:text-white transition-colors">Cancel</button>
+                                            <button type="submit" className="flex-1 bg-gold text-black py-4 rounded-xl font-black uppercase tracking-widest hover:bg-yellow-500 transition-all active:scale-95 shadow-lg shadow-gold/10">Add Member</button>
                                         </div>
                                     </form>
                                 </div>

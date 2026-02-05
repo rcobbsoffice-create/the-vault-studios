@@ -104,7 +104,7 @@ const BeatCard = ({ beat, onPlay, isPlaying, onLicense, isLicensed, onToggleFavo
                 {/* Action */}
                 <div className="flex items-center justify-between">
                     <div className="flex flex-col">
-                        <div className="text-lg font-black text-white leading-none">${pricing[selectedTier]}</div>
+                        <div className="text-lg font-black text-white leading-none">${(Number(pricing[selectedTier]) || 0).toFixed(2)}</div>
                         {!isLicensed && (
                             <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mt-1">
                                 {tiers.find(t => t.id === selectedTier).desc}

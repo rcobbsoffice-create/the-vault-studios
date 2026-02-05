@@ -326,7 +326,7 @@ const Book = () => {
                                 <div className="h-px bg-white/10 my-2"></div>
                                 <div className="flex justify-between items-center text-xl font-bold">
                                     <span className="text-white">Total</span>
-                                    <span className="text-gold">${getPrice()}</span>
+                                    <span className="text-gold">${getPrice().toFixed(2)}</span>
                                 </div>
                             </div>
 
@@ -396,7 +396,7 @@ const Book = () => {
                                     disabled={isProcessing}
                                     className="flex-1 bg-gold text-black font-black uppercase tracking-widest py-4 rounded-xl hover:bg-white transition-colors flex items-center justify-center gap-2"
                                 >
-                                    {isProcessing ? 'Processing...' : `Pay $${getPrice()}`} <Check size={18} />
+                                    {isProcessing ? 'Processing...' : `Pay $${getPrice().toFixed(2)}`} <Check size={18} />
                                 </button>
                             </div>
                         </div>

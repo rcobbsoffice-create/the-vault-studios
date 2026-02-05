@@ -59,7 +59,7 @@ const AIReceptionist = () => {
 
         setTimeout(() => {
             setCallStatus('connected');
-            speakWithElevenLabs("Hello! Thanks for calling Print Lab Studios. My name is Aria. How can I help you book a session today?");
+            speakWithElevenLabs("Hello! Thanks for calling Print Audio Lab. My name is Aria. How can I help you book a session today?");
         }, 2000);
     };
 
