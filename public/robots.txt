@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# Disallow admin and dashboard areas
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /login
+
+Sitemap: https://printaudiolab.com/sitemap.xml
