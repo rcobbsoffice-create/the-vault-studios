@@ -171,86 +171,71 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
 
         if (event.type === 'checkout.session.completed') {
             const session = event.data.object;
+            const metadata = session.metadata || {};
             const customerDetails = session.customer_details;
-            const email = customerDetails.email;
-            const name = customerDetails.name;
-            const phone = customerDetails.phone;
+            const email = customerDetails?.email;
+            const name = customerDetails?.name;
+            const phone = customerDetails?.phone;
 
-            if (email) {
-                console.log(`Processing New User from Stripe: ${email}`);
+            console.log(`Webhook: checkout.session.completed [${session.id}] - Type: ${metadata.type}`);
 
-                const bookingId = session.metadata ? session.metadata.bookingId : null;
-                if (bookingId) {
-                    console.log(`Updating Booking ${bookingId} to CONFIRMED`);
-                    await admin.firestore().collection('bookings').doc(bookingId).update({
-                        status: 'confirmed',
-                        paymentStatus: 'paid',
-                        remainingBalance: session.amount_total,
-                        stripeSessionId: session.id,
-                        customerEmail: email,
-                        customerName: name
+            // HANDLE SERVICE PURCHASE
+            if (metadata.type === 'service_purchase') {
+                const userId = metadata.userId;
+                const itemIds = metadata.itemIds ? metadata.itemIds.split(',') : [];
+                
+                console.log(`Processing Service Purchase for ${userId}: ${itemIds.join(', ')}`);
+
+                // Create Order record
+                const orderData = {
+                    userId,
+                    items: itemIds,
+                    amount: session.amount_total / 100,
+                    currency: session.currency,
+                    status: 'paid',
+                    stripeSessionId: session.id,
+                    customerEmail: email,
+                    customerName: name,
+                    createdAt: admin.firestore.FieldValue.serverTimestamp()
+                };
+
+                await admin.firestore().collection('orders').add(orderData);
+
+                // Send Confirmation Email
+                if (email && process.env.RESEND_API_KEY) {
+                    await getResend().emails.send({
+                        from: DEFAULT_FROM,
+                        to: [email],
+                        subject: "Order Confirmation - Print Audio Lab",
+                        html: `
+                            <h1>Thank you for your order, ${name || 'Client'}!</h1>
+                            <p>We've received your payment of $${(session.amount_total / 100).toFixed(2)} for our services.</p>
+                            <p>Your order is now being processed. Our team will reach out shortly for next steps.</p>
+                            <p><strong>Order ID:</strong> ${session.id}</p>
+                        `
                     });
                 }
+            }
 
-                try {
-                    await admin.auth().getUserByEmail(email);
-                    console.log("User already exists.");
-                } catch (userError) {
-                    if (userError.code === 'auth/user-not-found') {
-                        const padding = Math.random().toString(36).slice(-8);
-                        const tempPassword = `Vault${padding}!`;
+            // HANDLE BOOKING DEPOSIT (via Checkout)
+            const bookingId = metadata.bookingId;
+            if (bookingId || metadata.type === 'deposit') {
+                console.log(`Processing Booking Deposit [Checkout]: ${bookingId}`);
+                await handleBookingSuccess(bookingId, session, { email, name, phone });
+            }
+        }
 
-                        try {
-                            const newUser = await admin.auth().createUser({
-                                email: email,
-                                emailVerified: true,
-                                password: tempPassword,
-                                displayName: name || 'Valued Client',
-                                disabled: false,
-                            });
+        if (event.type === 'payment_intent.succeeded') {
+            const pi = event.data.object;
+            const metadata = pi.metadata || {};
+            
+            console.log(`Webhook: payment_intent.succeeded [${pi.id}] - Type: ${metadata.type}`);
 
-                            await admin.firestore().collection('users').doc(newUser.uid).set({
-                                email: email,
-                                name: name || 'Valued Client',
-                                phone: phone || '',
-                                role: 'client',
-                                createdAt: new Date(),
-                                source: 'stripe_deposit',
-                                stripeCustomerId: session.customer
-                            });
-
-                            // Send welcome email via Resend
-                            if (process.env.RESEND_API_KEY) {
-                                await getResend().emails.send({
-                                    from: DEFAULT_FROM,
-                                    to: [email],
-                                    subject: "Welcome to Print Audio Lab",
-                                    html: `
-                                        <h1>Welcome, ${name || 'Client'}!</h1>
-                                        <p>Thank you for your deposit.</p>
-                                        <p>Your account has been created.</p>
-                                        <p><strong>Email:</strong> ${email}</p>
-                                        <p><strong>Temporary Password:</strong> ${tempPassword}</p>
-                                        <p>Please log in and change your password.</p>
-                                    `
-                                });
-                                console.log("New User Created and Email Sent via Resend");
-                            } else {
-                                console.warn("RESEND_API_KEY not set. Skipping welcome email.");
-                            }
-                        } catch (createError) {
-                            if (createError.code && createError.code.startsWith('app/')) {
-                                console.warn(`DEV MODE: Ignoring Admin SDK Error: ${createError.message}`);
-                            } else {
-                                throw createError;
-                            }
-                        }
-                    } else if (userError.code && userError.code.startsWith('app/')) {
-                        console.warn(`DEV MODE: Ignoring Admin SDK Error: ${userError.message}`);
-                    } else {
-                        throw userError;
-                    }
-                }
+            if (metadata.type === 'deposit' && metadata.bookingId) {
+                console.log(`Processing Booking Deposit [PaymentIntent]: ${metadata.bookingId}`);
+                // For PaymentIntents from our modal, email/name might not be in customer_details of PI objects directly
+                // but we can look them up or use the booking data
+                await handleBookingSuccess(metadata.bookingId, pi, {});
             }
         }
 
@@ -260,3 +245,67 @@ exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
         res.status(400).send(`Webhook Error: ${err.message}`);
     }
 });
+
+/**
+ * Helper to handle successful booking payments
+ */
+async function handleBookingSuccess(bookingId, stripeObject, customerInfo) {
+    const { getResend, DEFAULT_FROM } = require('./email');
+    const email = customerInfo.email || stripeObject.receipt_email;
+    const name = customerInfo.name;
+    const phone = customerInfo.phone;
+
+    if (bookingId) {
+        console.log(`Updating Booking ${bookingId} to CONFIRMED`);
+        await admin.firestore().collection('bookings').doc(bookingId).update({
+            status: 'Confirmed',
+            paymentStatus: 'paid',
+            stripePaymentId: stripeObject.id,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+    }
+
+    if (email) {
+        try {
+            await admin.auth().getUserByEmail(email);
+        } catch (userError) {
+            if (userError.code === 'auth/user-not-found') {
+                const padding = Math.random().toString(36).slice(-8);
+                const tempPassword = `Vault${padding}!`;
+
+                const newUser = await admin.auth().createUser({
+                    email: email,
+                    emailVerified: true,
+                    password: tempPassword,
+                    displayName: name || 'Valued Client',
+                });
+
+                await admin.firestore().collection('users').doc(newUser.uid).set({
+                    email: email,
+                    name: name || 'Valued Client',
+                    phone: phone || '',
+                    role: 'ARTIST',
+                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    source: 'stripe_payment',
+                    stripeCustomerId: stripeObject.customer
+                });
+
+                if (process.env.RESEND_API_KEY) {
+                    await getResend().emails.send({
+                        from: DEFAULT_FROM,
+                        to: [email],
+                        subject: "Welcome to Print Audio Lab",
+                        html: `
+                            <h1>Welcome, ${name || 'Client'}!</h1>
+                            <p>Thank you for your payment.</p>
+                            <p>Your account has been created so you can manage your recordings and sessions.</p>
+                            <p><strong>Email:</strong> ${email}</p>
+                            <p><strong>Temporary Password:</strong> ${tempPassword}</p>
+                            <p>Please log in at <a href="${process.env.FRONTEND_URL}/login">Print Audio Lab</a> and change your password.</p>
+                        `
+                    });
+                }
+            }
+        }
+    }
+}
