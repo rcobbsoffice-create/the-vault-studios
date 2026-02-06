@@ -30,6 +30,7 @@ import {
 import CalendarView from '../components/admin/CalendarView';
 import EmailEditor from '../components/admin/EmailEditor';
 import VoiceDebugger from '../components/admin/VoiceDebugger';
+import YouTubeConverter from '../components/admin/YouTubeConverter';
 import { functions } from '../firebase';
 import { httpsCallable } from 'firebase/functions';
 
@@ -907,6 +908,9 @@ const AdminDashboard = () => {
                         <button onClick={() => { setCurrentView('voice'); setIsMobileMenuOpen(false); }} className={`w-full p-4 rounded-xl flex items-center gap-3 font-bold uppercase tracking-widest text-xs transition-all ${currentView === 'voice' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>
                             <Mic size={18} /> Test Voice AI
                         </button>
+                        <button onClick={() => { setCurrentView('tools'); setIsMobileMenuOpen(false); }} className={`w-full p-4 rounded-xl flex items-center gap-3 font-bold uppercase tracking-widest text-xs transition-all ${currentView === 'tools' ? 'bg-red-600 text-white shadow-lg shadow-red-500/20' : 'bg-zinc-900 text-zinc-500 hover:text-white hover:bg-zinc-800'}`}>
+                            <Music size={18} /> YouTube MP3
+                        </button>
                     </div>
 
                     {/* Main Content Area */}
@@ -1556,6 +1560,13 @@ const AdminDashboard = () => {
                         {currentView === 'voice' && (
                             <div className="animate-in fade-in slide-in-from-bottom-8 duration-500 flex justify-center">
                                 <VoiceDebugger />
+                            </div>
+                        )}
+
+                        {/* 6. TOOLS VIEW - YouTube Converter */}
+                        {currentView === 'tools' && (
+                            <div className="animate-in fade-in slide-in-from-bottom-8 duration-500">
+                                <YouTubeConverter />
                             </div>
                         )}
 
