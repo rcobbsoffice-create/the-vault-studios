@@ -82,6 +82,76 @@ exports.createPaymentIntent = functions.https.onCall(async (data, context) => {
 });
 
 /**
+ * Callable function to create a Stripe Checkout Session for services.
+ * Expects: { items: [{ id, name, price, quantity }] }
+ */
+exports.createServiceCheckout = functions.https.onCall(async (data, context) => {
+    // Firebase v2 may wrap data differently, handle both cases
+    const payload = data.data || data;
+    const items = payload.items;
+    const customerEmail = payload.customerEmail;
+    
+    console.log('createServiceCheckout received:', JSON.stringify(payload));
+    
+    if (!items || !Array.isArray(items) || items.length === 0) {
+        console.error('Invalid items:', items);
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Missing or invalid items array."
+        );
+    }
+
+    try {
+        ensureFirebase();
+        const stripeClient = initStripe();
+
+        // Build line items for Stripe Checkout
+        const lineItems = items.map(item => ({
+            price_data: {
+                currency: 'usd',
+                product_data: {
+                    name: item.name,
+                    description: item.type === 'website' ? 'Website Design Service' : 'Press Release Service',
+                },
+                unit_amount: Math.round(item.price * 100), // Convert to cents
+            },
+            quantity: item.quantity || 1,
+        }));
+
+        // Calculate total for metadata
+        const total = items.reduce((sum, item) => sum + (item.price * (item.quantity || 1)), 0);
+
+        console.log(`Creating Checkout Session for ${items.length} items, total: $${total}`);
+
+        // Create Stripe Checkout Session
+        const session = await stripeClient.checkout.sessions.create({
+            payment_method_types: ['card'],
+            line_items: lineItems,
+            mode: 'payment',
+            success_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/services?checkout=success`,
+            cancel_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/services?checkout=cancelled`,
+            customer_email: customerEmail || (context.auth ? undefined : undefined),
+            metadata: {
+                userId: context.auth ? context.auth.uid : 'guest',
+                itemIds: items.map(i => i.id).join(','),
+                type: 'service_purchase'
+            },
+        });
+
+        console.log(`Checkout Session created: ${session.id}`);
+
+        return {
+            url: session.url,
+            sessionId: session.id
+        };
+
+    } catch (error) {
+        console.error("Error creating Checkout Session:", error);
+        throw new functions.https.HttpsError("internal", error.message);
+    }
+});
+
+/**
  * Stripe Webhook Handler
  */
 exports.stripeWebhook = functions.https.onRequest(async (req, res) => {

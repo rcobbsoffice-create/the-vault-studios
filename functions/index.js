@@ -51,8 +51,9 @@ exports.sendEmail = sendEmail;
 exports.sendEmailDev = sendEmailDev;
 
 // Import and re-export Stripe functions
-const { createPaymentIntent, stripeWebhook } = require('./stripe');
+const { createPaymentIntent, createServiceCheckout, stripeWebhook } = require('./stripe');
 exports.createPaymentIntent = createPaymentIntent;
+exports.createServiceCheckout = createServiceCheckout;
 exports.stripeWebhook = stripeWebhook;
 
 // Import and re-export AI functions

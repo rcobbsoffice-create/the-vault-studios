@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import AIReceptionist from './components/AIReceptionist';
 import ProtectedRoute from './components/ProtectedRoute';
+import CartDrawer from './components/CartDrawer';
+import { CartProvider } from './core/CartContext';
 import Home from './pages/Home';
 import Book from './pages/Book';
 import Studios from './pages/Studios';
@@ -13,6 +15,8 @@ import Beats from './pages/Beats';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import DataDeletion from './pages/DataDeletion';
 import TermsOfService from './pages/TermsOfService';
+import Services from './pages/Services';
+import ServiceDetail from './pages/ServiceDetail';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -41,39 +45,43 @@ class ErrorBoundary extends React.Component {
 function App() {
   return (
     <Router>
-      <ErrorBoundary>
-        <div className="min-h-screen bg-black text-white selection:bg-gold selection:text-black">
-          <Navbar />
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/studios" element={<Studios />} />
-
-            <Route path="/book" element={<Book />} />
-            <Route path="/beats" element={<Beats />} />
-            <Route path="/login" element={<Login />} />
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin"
-              element={
-                <ProtectedRoute adminOnly={true}>
-                  <AdminDashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="/privacy" element={<PrivacyPolicy />} />
-            <Route path="/data-deletion" element={<DataDeletion />} />
-            <Route path="/terms" element={<TermsOfService />} />
-          </Routes>
-          <AIReceptionist />
-        </div>
-      </ErrorBoundary>
+      <CartProvider>
+        <ErrorBoundary>
+          <div className="min-h-screen bg-black text-white selection:bg-gold selection:text-black">
+            <Navbar />
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/studios" element={<Studios />} />
+              <Route path="/book" element={<Book />} />
+              <Route path="/beats" element={<Beats />} />
+              <Route path="/login" element={<Login />} />
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <ProtectedRoute adminOnly={true}>
+                    <AdminDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/data-deletion" element={<DataDeletion />} />
+              <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/services" element={<Services />} />
+              <Route path="/services/:productId" element={<ServiceDetail />} />
+            </Routes>
+            <CartDrawer />
+            <AIReceptionist />
+          </div>
+        </ErrorBoundary>
+      </CartProvider>
     </Router>
   );
 }

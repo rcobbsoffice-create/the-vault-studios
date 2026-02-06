@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Menu, X, User, LogIn } from 'lucide-react';
+import { Menu, X, User, LogIn, ShoppingCart } from 'lucide-react';
 import { useAuth } from '../core/AuthContext';
+import { useCart } from '../core/CartContext';
 
 const Navbar = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [scrolled, setScrolled] = useState(false);
     const { isAuthenticated, user, isAdmin } = useAuth();
+    const { getItemCount, openCart } = useCart();
+    const cartCount = getItemCount();
 
     useEffect(() => {
         const handleScroll = () => {
@@ -31,7 +34,21 @@ const Navbar = () => {
                 <div className="hidden md:flex items-center space-x-8">
                     <Link to="/" className="text-gray-300 hover:text-white transition-colors text-sm uppercase tracking-widest">Home</Link>
                     <Link to="/studios" className="text-gray-300 hover:text-white transition-colors text-sm uppercase tracking-widest">Studios</Link>
+                    <Link to="/services" className="text-gray-300 hover:text-white transition-colors text-sm uppercase tracking-widest">Services</Link>
                     <Link to="/beats" className="text-gray-300 hover:text-white transition-colors text-sm uppercase tracking-widest">Marketplace</Link>
+
+                    {/* Cart Button */}
+                    <button
+                        onClick={openCart}
+                        className="relative text-gray-300 hover:text-gold transition-colors p-2"
+                    >
+                        <ShoppingCart size={20} />
+                        {cartCount > 0 && (
+                            <span className="absolute -top-1 -right-1 bg-gold text-black text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                                {cartCount}
+                            </span>
+                        )}
+                    </button>
 
 
                     {isAuthenticated ? (
@@ -85,6 +102,7 @@ const Navbar = () => {
                 <div className="md:hidden absolute top-20 left-0 w-full bg-black/95 border-b border-white/10 p-6 flex flex-col space-y-4 shadow-2xl">
                     <Link to="/" onClick={() => setIsOpen(false)} className="text-xl font-display uppercase">Home</Link>
                     <Link to="/studios" onClick={() => setIsOpen(false)} className="text-xl font-display uppercase">Studios</Link>
+                    <Link to="/services" onClick={() => setIsOpen(false)} className="text-xl font-display uppercase">Services</Link>
                     <Link to="/beats" onClick={() => setIsOpen(false)} className="text-xl font-display uppercase">Marketplace</Link>
 
 
